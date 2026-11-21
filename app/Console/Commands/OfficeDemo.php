@@ -28,14 +28,32 @@ class OfficeDemo extends Command
     /** Peringkat rotator: [nama, min saat, max saat, department (null = kerja di meja)]. */
     private const STAGE_WORK = 0;
 
+    private const STAGE_TOILET = 1;
+
+    private const STAGE_PANTRY = 2;
+
     private const STAGES = [
         ['work', 70, 100, null],
         ['toilet', 25, 40, 'toilet'],
-        ['pantry', 40, 60, 'pantry'],
+        ['pantry', 25, 40, 'pantry'],
         ['chill', 60, 90, 'playroom'],
     ];
 
+    /** Had keras: paling ramai 2 orang dalam pantri serentak. */
+    public const PANTRY_CAPACITY = 2;
+
+    /** Staff team: masa minum (saat dalam fasa kerja) dan tempoh duduk di pantri. */
+    private const DRINK_FROM = 20;
+
+    private const DRINK_SPAN = 130; // 20..150 s
+
     private float $speed = 1.0;
+
+    /** @var array<string, true> session id yang pegang slot pantri sekarang */
+    private array $pantry = [];
+
+    /** @var array<string, true> staff team yang dah sampai masa minum tapi pantri penuh (dapat keutamaan) */
+    private array $pantryWaiting = [];
 
     /** @var array<int, array<string, mixed>> */
     private array $team = [];
@@ -222,10 +240,68 @@ class OfficeDemo extends Command
     private function initRotators(): void
     {
         foreach (array_keys($this->rotators) as $i) {
-            $stage = $i % count(self::STAGES);
-            [, $min, $max] = self::STAGES[$stage];
-            $this->startStage($i, $stage, ($min + lcg_value() * ($max - $min)) / $this->speed, false);
+            $this->resumeStage($i, false);
         }
+    }
+
+    /**
+     * Rotator ke-i sambung di peringkat (i % 4) dengan baki masa rawak.
+     * Kalau peringkat tu pantri dan slot penuh, jatuh ke tandas dulu (tak langgar had pantri).
+     */
+    private function resumeStage(int $i, bool $emit): void
+    {
+        $stage = $i % count(self::STAGES);
+        if ($stage === self::STAGE_PANTRY && ! $this->pantryTryEnter($this->rotators[$i]['sid'])) {
+            $stage = self::STAGE_TOILET;
+        }
+        [, $min, $max] = self::STAGES[$stage];
+        $this->startStage($i, $stage, ($min + lcg_value() * ($max - $min)) / $this->speed, $emit);
+    }
+
+    // ---- pintu pantri (had 2 orang) ----
+
+    /**
+     * Cuba ambil slot pantri. Staff team ($priority) dapat keutamaan: kalau gagal dia masuk senarai tunggu,
+     * dan rotator hanya boleh masuk kalau slot kosong lebih banyak daripada yang tengah tunggu.
+     */
+    public function pantryTryEnter(string $sid, bool $priority = false): bool
+    {
+        if (isset($this->pantry[$sid])) {
+            return true;
+        }
+
+        $free = self::PANTRY_CAPACITY - count($this->pantry);
+        $ok = $priority ? $free > 0 : $free - count($this->pantryWaiting) > 0;
+
+        if ($ok) {
+            $this->pantry[$sid] = true;
+            unset($this->pantryWaiting[$sid]);
+
+            return true;
+        }
+
+        if ($priority) {
+            $this->pantryWaiting[$sid] = true;
+        }
+
+        return false;
+    }
+
+    /** Lepaskan slot. Panggil SELEPAS event keluar pantri dihantar (supaya bilangan dalam pantri tak pernah lebih 2). */
+    public function pantryLeave(string $sid): void
+    {
+        unset($this->pantry[$sid], $this->pantryWaiting[$sid]);
+    }
+
+    public function pantryClear(): void
+    {
+        $this->pantry = [];
+        $this->pantryWaiting = [];
+    }
+
+    public function pantryCount(): int
+    {
+        return count($this->pantry);
     }
 
     // ---- fasa ----
@@ -234,6 +310,7 @@ class OfficeDemo extends Command
     private function standup(): void
     {
         $this->rotHold = true;
+        $this->pantryClear(); // semua ke boardroom: kosongkan pantri
         $until = microtime(true) + 70 / $this->speed;
         $first = true;
 
@@ -252,9 +329,7 @@ class OfficeDemo extends Command
         // supaya tak semua serbu toilet serentak (sebelum ini semua mula dari WORK dan tamat serentak).
         $this->rotHold = false;
         foreach (array_keys($this->rotators) as $i) {
-            $stage = $i % count(self::STAGES);
-            [, $min, $max] = self::STAGES[$stage];
-            $this->startStage($i, $stage, ($min + lcg_value() * ($max - $min)) / $this->speed, true);
+            $this->resumeStage($i, true);
         }
     }
 
@@ -274,23 +349,76 @@ class OfficeDemo extends Command
         $now = microtime(true);
         $until = $now + $seconds / $this->speed;
         $state = [];
+
+        // Setiap staff team minum sekali dalam fasa kerja (20-150s), bergilir (tetingkap masing-masing) supaya tak serbu pantri.
+        $count = max(1, count($this->team));
+        $width = intdiv(self::DRINK_SPAN, $count);
+        $order = array_keys($this->team);
+        shuffle($order);
+
         foreach ($this->team as $i => $m) {
-            $state[$i] = ['next' => $now + random_int(1, 6) / $this->speed, 'end' => null, 'dept' => null, 'step' => null];
+            $slot = (int) array_search($i, $order, true);
+            $drinkAt = self::DRINK_FROM + $slot * $width + random_int(0, max(0, $width - 6));
+            $state[$i] = [
+                'next' => $now + random_int(1, 6) / $this->speed, 'end' => null, 'dept' => null, 'step' => null,
+                'drinkAt' => $now + $drinkAt / $this->speed, 'drunk' => false,
+                'inPantry' => false, 'pantryUntil' => 0.0, 'pantryPing' => 0.0,
+            ];
         }
 
         while (microtime(true) < $until) {
             $now = microtime(true);
             foreach ($this->team as $i => $m) {
-                $this->workStep($m, $state[$i], $now);
+                $this->teamStep($m, $state[$i], $now);
             }
             $this->tickRotators();
             usleep((int) (1000000 / $this->speed));
         }
 
         // Akhir fasa kerja: turn_done (+ token Claude bertambah). Staff kekal di meja sampai sweep hantar ke chill room.
-        foreach ($this->team as $m) {
+        // turn_done (department null) pun tanda keluar pantri, lepas tu baru slot dilepas.
+        foreach ($this->team as $i => $m) {
             $this->emit($m, 'turn_done', null, null, null, $this->bumpUsage($m));
+            $this->pantryLeave($m['sid']);
         }
+        $this->pantryWaiting = [];
+    }
+
+    /** Satu tick staff team: minum di pantri (kalau slot ada) atau langkah kerja biasa. */
+    private function teamStep(array $m, array &$s, float $now): void
+    {
+        if ($s['inPantry']) {
+            if ($now >= $s['pantryUntil']) {
+                // Habis minum: terus mula tool (event keluar pantri), BARU lepas slot
+                $this->startTool($m, $s, $now);
+                $s['inPantry'] = false;
+                $this->pantryLeave($m['sid']);
+
+                return;
+            }
+            if ($now >= $s['pantryPing']) {
+                $this->emit($m, 'idle', null, null, 'pantry'); // jaga last_event_at segar
+                $s['pantryPing'] = $now + 20 / $this->speed;
+            }
+
+            return;
+        }
+
+        if (! $s['drunk'] && $s['end'] === null && $now >= $s['drinkAt']) {
+            if ($this->pantryTryEnter($m['sid'], true)) {
+                $this->emit($m, 'idle', null, null, 'pantry');
+                $s['drunk'] = true;
+                $s['inPantry'] = true;
+                $s['pantryUntil'] = $now + random_int(25, 35) / $this->speed;
+                $s['pantryPing'] = $now + 20 / $this->speed;
+
+                return;
+            }
+            // Penuh: sambung kerja, cuba lagi beberapa saat lagi
+            $s['drinkAt'] = $now + random_int(2, 4) / $this->speed;
+        }
+
+        $this->workStep($m, $s, $now);
     }
 
     /** Sesiapa idle 2 minit akan dihantar sweep ke chill room. Seorang kena rate limit (mesin kopi). */
@@ -331,12 +459,18 @@ class OfficeDemo extends Command
             $this->emit($m, 'tool_error', $step[0], $step[1], null);
             $s['next'] = $now + random_int(5, 8) / $this->speed;
         } else {
-            $step = $m['steps'][array_rand($m['steps'])];
-            $s['step'] = $step;
-            $s['dept'] = $step[2];
-            $this->emit($m, 'tool_start', $step[0], $step[1], $step[2]);
-            $s['end'] = $now + random_int(2, 4) / $this->speed;
+            $this->startTool($m, $s, $now);
         }
+    }
+
+    /** Mula satu tool (hantar staff ke meja department langkah tu). */
+    private function startTool(array $m, array &$s, float $now): void
+    {
+        $step = $m['steps'][array_rand($m['steps'])];
+        $s['step'] = $step;
+        $s['dept'] = $step[2];
+        $this->emit($m, 'tool_start', $step[0], $step[1], $step[2]);
+        $s['end'] = $now + random_int(2, 4) / $this->speed;
     }
 
     // ---- rotator ----
@@ -356,7 +490,21 @@ class OfficeDemo extends Command
                 if ($r['end'] !== null) {
                     $this->emit($m, 'tool_end', $r['step'][0], $r['step'][1], $r['dept']);
                 }
-                $this->startStage($i, ($r['stage'] + 1) % count(self::STAGES));
+                $next = ($r['stage'] + 1) % count(self::STAGES);
+
+                if ($next === self::STAGE_PANTRY && ! $this->pantryTryEnter($m['sid'])) {
+                    // Pantri penuh: kekal di peringkat sekarang 6-10s lagi, tetap hantar event supaya last_event_at segar
+                    $this->rot[$i]['until'] = $now + random_int(6, 10) / $this->speed;
+                    $this->rot[$i]['ping'] = $now + 20 / $this->speed;
+                    $this->emit($m, 'idle', null, null, self::STAGES[$r['stage']][3]);
+
+                    continue;
+                }
+
+                $this->startStage($i, $next);
+                if ($r['stage'] === self::STAGE_PANTRY) {
+                    $this->pantryLeave($m['sid']); // event keluar pantri dah dihantar
+                }
             } elseif ($r['stage'] === self::STAGE_WORK) {
                 $this->workStep($m, $this->rot[$i], $now);
             } elseif ($now >= $r['ping']) {

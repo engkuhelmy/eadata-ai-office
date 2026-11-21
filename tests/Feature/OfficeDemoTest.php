@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Console\Commands\OfficeDemo;
 use App\Models\Agent;
 use App\Models\AgentEvent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -85,6 +86,91 @@ class OfficeDemoTest extends TestCase
         // Rotator rehat dengan event 'idle' (bukan tool) di bilik masing-masing
         $this->assertGreaterThan(0, AgentEvent::where('event', 'idle')->whereIn('department', ['toilet', 'pantry', 'playroom'])->count());
     }
+
+    /** Main balik event ikut id: kira berapa orang "dalam pantri" (department terakhir = pantry) pada setiap saat. */
+    private function pantryReplay(): array
+    {
+        $in = [];
+        $max = 0;
+        $visited = [];
+
+        foreach (AgentEvent::query()->orderBy('id')->get(['id', 'agent_id', 'department']) as $e) {
+            if ($e->department === 'pantry') {
+                $in[$e->agent_id] = true;
+                $visited[$e->agent_id] = true;
+            } else {
+                unset($in[$e->agent_id]);
+            }
+            $max = max($max, count($in));
+        }
+
+        return ['max' => $max, 'visited' => count($visited), 'visitedIds' => array_keys($visited)];
+    }
+
+    public function test_pantry_never_has_more_than_two_people_at_once(): void
+    {
+        $this->runDemo();
+
+        $replay = $this->pantryReplay();
+
+        $this->assertGreaterThan(0, $replay['max'], 'tiada sesiapa ke pantri');
+        $this->assertLessThanOrEqual(2, $replay['max'], 'pantri lebih 2 orang serentak');
+    }
+
+    public function test_at_least_eight_different_staff_take_a_drink_in_the_pantry(): void
+    {
+        $this->runDemo();
+
+        $replay = $this->pantryReplay();
+
+        $this->assertGreaterThanOrEqual(8, $replay['visited'], 'kurang 8 staff yang ke pantri');
+
+        // Staff team pun minum (pantri bukan rotator sahaja)
+        $teamIds = Agent::whereIn('custom_name', ['Aiman', 'Balqis', 'Chandra', 'Dewi', 'Evan'])->pluck('id')->all();
+        $this->assertNotEmpty(array_intersect($teamIds, $replay['visitedIds']), 'tiada staff team ke pantri');
+    }
+
+    public function test_team_drink_run_has_no_work_events_while_in_pantry(): void
+    {
+        $this->runDemo();
+
+        // Lepas event 'idle' pantry, event seterusnya staff yang sama mesti bukan tool_end/tool_error/needs_approval
+        // (dia tak buat kerja di pantri); keluar pantri hanya melalui tool_start / turn_done / idle bilik lain / boardroom.
+        $teamIds = Agent::whereIn('custom_name', ['Aiman', 'Balqis', 'Chandra', 'Dewi', 'Evan'])->pluck('id')->all();
+        foreach ($teamIds as $id) {
+            $prev = null;
+            foreach (AgentEvent::where('agent_id', $id)->orderBy('id')->get() as $e) {
+                if ($prev && $prev->department === 'pantry' && $e->department !== 'pantry') {
+                    $this->assertContains($e->event, ['tool_start', 'turn_done', 'subagent_start', 'idle', 'rate_limited'], "keluar pantri dengan {$e->event}");
+                }
+                $prev = $e;
+            }
+        }
+        $this->assertTrue(true);
+    }
+
+    public function test_pantry_gate_allows_two_and_team_has_priority(): void
+    {
+        $demo = new OfficeDemo;
+
+        $this->assertTrue($demo->pantryTryEnter('a'));
+        $this->assertTrue($demo->pantryTryEnter('a')); // dah dalam: idempoten
+        $this->assertSame(1, $demo->pantryCount());
+        $this->assertTrue($demo->pantryTryEnter('b'));
+        $this->assertFalse($demo->pantryTryEnter('c'));
+        $this->assertFalse($demo->pantryTryEnter('t', true)); // team penuh: masuk senarai tunggu
+        $this->assertSame(2, $demo->pantryCount());
+
+        $demo->pantryLeave('a');
+        $this->assertFalse($demo->pantryTryEnter('c')); // slot kosong tu untuk team yang tunggu
+        $this->assertTrue($demo->pantryTryEnter('t', true));
+        $this->assertSame(2, $demo->pantryCount());
+
+        $demo->pantryClear();
+        $this->assertSame(0, $demo->pantryCount());
+        $this->assertTrue($demo->pantryTryEnter('c'));
+    }
+
     public function test_demo_sessions_are_never_terminated(): void
     {
         $this->runDemo();

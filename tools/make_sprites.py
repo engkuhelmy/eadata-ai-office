@@ -1246,6 +1246,267 @@ def wall_dartboard():
     return img
 
 
+# ---------------------------------------------------------------- kiosk berjenama (pantri)
+# Peti isometrik bersaiz bebas (sbox) + logo rata yang di-shear ke muka kiri/kanan (face_paste).
+
+def sbox(d, bx, by, hw, h, top, left, right, hi=None):
+    """Peti isometrik: bucu bawah (bx, by), separuh-lebar hw (muka condong 1:2), tinggi h."""
+    hh = hw // 2
+    d.polygon([(bx - hw, by - hh - h), (bx, by - h), (bx, by), (bx - hw, by - hh)], fill=left, outline=OL)
+    d.polygon([(bx + hw, by - hh - h), (bx, by - h), (bx, by), (bx + hw, by - hh)], fill=right, outline=OL)
+    d.polygon([(bx, by - h - hw), (bx + hw, by - h - hh), (bx, by - h), (bx - hw, by - h - hh)], fill=top, outline=OL)
+    if hi:
+        d.line([(bx - hw + 2, by - h - hh), (bx, by - h - hw + 2), (bx + hw - 2, by - h - hh)], fill=hi)
+
+
+def face_paste(img, flat, bx, by, hw, h, face, fx0, fy0):
+    """Tampal imej rata `flat` pada muka sbox. fx0/fy0 = ofset dari bucu atas-luar muka. Shear 1px/2px."""
+    hh = hw // 2
+    px = flat.load()
+    for fx in range(flat.width):
+        u = fx0 + fx
+        for fy in range(flat.height):
+            c = px[fx, fy]
+            if not c[3]:
+                continue
+            if face == 'L':
+                x, y = bx - hw + u, by - hh - h + u // 2 + fy0 + fy
+            else:
+                x, y = bx + u, by - h - u // 2 + fy0 + fy
+            img.putpixel((x, y), c)
+
+
+def flat_rows(flat, x0, y0, rows, color):
+    for gy, row in enumerate(rows):
+        for gx, ch in enumerate(row):
+            if ch == 'X':
+                flat.putpixel((x0 + gx, y0 + gy), color)
+
+
+SB_GREEN = (0, 112, 74, 255)
+SB_DARK = (30, 57, 50, 255)
+WHITE_C = (255, 255, 255, 255)
+
+
+def shade_img(src, f):
+    out = src.copy()
+    px = out.load()
+    for y in range(out.height):
+        for x in range(out.width):
+            r, g, b, a = px[x, y]
+            if a:
+                px[x, y] = (int(r * f), int(g * f), int(b * f), a)
+    return out
+
+
+def starbucks_logo(size=17):
+    """Logo bulat rata: cincin hijau luar, cincin putih, cakera hijau, siren putih ringkas."""
+    fl, d = new(size, size)
+    r = size - 1
+    d.ellipse([0, 0, r, r], fill=SB_GREEN)
+    d.ellipse([1, 1, r - 1, r - 1], fill=WHITE_C)
+    d.ellipse([2, 2, r - 2, r - 2], fill=SB_GREEN)
+    siren = ["....X....",
+             "...XXX...",
+             "..XXXXX..",
+             "..X.X.X..",
+             ".XXXXXXX.",
+             "X.XXXXX.X",
+             "XX.XXX.XX",
+             ".X..X..X.",
+             "...XXX..."]
+    o = (size - 9) // 2
+    flat_rows(fl, o, o, siren, WHITE_C)
+    return fl
+
+
+def machine_starbucks():
+    hs = 70
+    img, d = new(56, hs)
+    cx, cy = box(d, hs, 12, (244, 246, 244, 255), SB_DARK, shade(SB_DARK, 0.7), (255, 255, 255, 255))
+    d.line([left_pt(cy, 12, 1, 8), left_pt(cy, 12, 27, 8)], fill=SB_GREEN)
+    d.line([(30, cy + 8 + 1), (54, cy - 7 + 1)], fill=shade(SB_GREEN, 0.75))
+    ty = cy - 12  # pusat muka atas kaunter
+    hw, h = 20, 26
+    bx, by = 28, ty + 4
+    sbox(d, bx, by, hw, h, (236, 240, 244, 255), (222, 228, 234, 255), (170, 178, 188, 255), (255, 255, 255, 255))
+    # trim hijau (apron) atas & bawah pada kedua-dua muka
+    for face, k in (('L', 1.0), ('R', 0.75)):
+        fl, fd = new(hw - 1, 1)
+        fd.line([(0, 0), (hw - 2, 0)], fill=shade(SB_GREEN, k))
+        for fy in (1, 2, h - 3, h - 2):
+            face_paste(img, fl, bx, by, hw, h, face, 1, fy)
+    logo = starbucks_logo(17)
+    face_paste(img, logo, bx, by, hw, h, 'L', 1, 5)
+    face_paste(img, shade_img(logo, 0.78), bx, by, hw, h, 'R', 1, 5)
+    # hopper biji kopi di atas
+    sbox(d, bx, by - h - hw // 2 + 4, 7, 6, (110, 70, 44, 255), (84, 52, 32, 255), (60, 36, 22, 255), (160, 110, 74, 255))
+    # dulang titis hitam di hadapan + cawan hijau-putih
+    sbox(d, 28, ty + 13, 12, 3, (50, 50, 58, 255), (32, 32, 38, 255), (20, 20, 26, 255), (96, 96, 108, 255))
+    d.rectangle([33, ty + 1, 37, ty + 7], fill=WHITE_C, outline=OL)
+    d.rectangle([34, ty + 3, 36, ty + 4], fill=SB_GREEN)
+    # muncung wap keluli (kanan) + wap
+    d.rectangle([51, ty - 9, 52, ty + 1], fill=(200, 206, 214, 255), outline=OL)
+    d.point((51, ty + 2), fill=OL)
+    d.point((52, ty + 2), fill=OL)
+    for (x, y) in ((51, ty - 12), (52, ty - 15), (50, ty - 18), (51, ty - 21)):
+        d.point((x, y), fill=(252, 252, 254, 255))
+        d.point((x + 1, y), fill=(252, 252, 254, 255))
+        d.point((x, y + 1), fill=(210, 222, 232, 255))
+    return img
+
+
+def machine_zus():
+    hs = 72
+    img, d = new(56, hs)
+    NAVY, NAVY_L, NAVY_R = (14, 42, 96, 255), (20, 58, 124, 255), (10, 30, 72, 255)
+    YEL = (255, 204, 0, 255)
+    cx, cy = box(d, hs, 12, (240, 242, 246, 255), (228, 232, 240, 255), (192, 198, 210, 255), (255, 255, 255, 255))
+    d.line([left_pt(cy, 12, 1, 8), left_pt(cy, 12, 27, 8)], fill=YEL)
+    d.line([(30, cy + 8 + 1), (54, cy - 7 + 1)], fill=shade(YEL, 0.8))
+    ty = cy - 12
+    hw, h = 22, 28
+    bx, by = 28, ty + 4
+    sbox(d, bx, by, hw, h, (34, 56, 104, 255), NAVY_L, NAVY_R, (90, 120, 190, 255))
+    for face, k in (('L', 1.0), ('R', 0.8)):
+        fl, fd = new(hw - 1, 2)
+        fd.rectangle([0, 0, hw - 2, 1], fill=shade(YEL, k))
+        face_paste(img, fl, bx, by, hw, h, face, 1, 3)
+        fl, fd = new(hw - 1, 10)
+        col = shade(WHITE_C, k)
+        for dx in (0, 1):
+            pixel_text(fl, (0 + dx, -2), 'ZUS', 10, col)
+        face_paste(img, fl, bx, by, hw, h, face, 1, 7)
+        fl, fd = new(hw - 1, 5)
+        fd.rectangle([2, 0, hw - 4, 4], fill=(8, 22, 54, 255))
+        fd.point((hw - 6, 2), fill=YEL)
+        fd.line([(4, 2), (9, 2)], fill=(90, 160, 230, 255))
+        face_paste(img, fl, bx, by, hw, h, face, 1, 19)
+    # dulang hitam + cawan putih berpita biru
+    sbox(d, 28, ty + 13, 12, 3, (44, 44, 50, 255), (28, 28, 34, 255), (18, 18, 24, 255), (90, 90, 100, 255))
+    d.rectangle([33, ty + 1, 37, ty + 7], fill=WHITE_C, outline=OL)
+    d.rectangle([34, ty + 3, 36, ty + 5], fill=NAVY)
+    d.line([(33, ty), (37, ty)], fill=(120, 80, 50, 255))
+    return img
+
+
+def machine_icecream():
+    hs = 72
+    img, d = new(56, hs)
+    PINK, BLUE = (228, 0, 124, 255), (11, 58, 130, 255)
+    cx, cy = box(d, hs, 6, (250, 250, 252, 255), BLUE, shade(BLUE, 0.72), WHITE_C)
+    ty = cy - 6
+    hw, h = 24, 24
+    bx, by = 28, ty + 11
+    sbox(d, bx, by, hw, h, (255, 236, 246, 255), PINK, shade(PINK, 0.72), (255, 170, 214, 255))
+    tubs = [(228, 0, 124), (255, 255, 255), (96, 60, 38), (120, 200, 90), (250, 190, 40), (160, 100, 220)]
+    for face, k in (('L', 1.0), ('R', 0.82)):
+        # lencana BR putih
+        fl, fd = new(hw - 1, 13)
+        fd.rounded_rectangle([0, 0, hw - 2, 12], radius=2, fill=WHITE_C, outline=OL)
+        bl, pk = shade(BLUE, k), shade(PINK, k)
+        for dx in (0, 1):
+            pixel_text(fl, (4 + dx, -1), 'B', 11, bl)
+            pixel_text(fl, (13 + dx, -1), 'R', 11, pk)
+        face_paste(img, fl, bx, by, hw, h, face, 1, 2)
+        # tingkap kaca + tub 31 perisa
+        fl, fd = new(hw - 1, 8)
+        fd.rectangle([0, 0, hw - 2, 7], fill=(196, 226, 246, 255), outline=OL)
+        for i in range(5):
+            col = shade(tubs[(i + (0 if face == 'L' else 2)) % len(tubs)], k)
+            fd.rectangle([2 + i * 4, 2, 4 + i * 4, 6], fill=col)
+            fl.putpixel((2 + i * 4, 2), WHITE_C)
+        face_paste(img, fl, bx, by, hw, h, face, 1, 15)
+    # cone + 2 scoop (vanila, strawberi) di atas, cone menunjuk ke bawah
+    ctop = by - h - hw // 2
+    m = 28
+    d.polygon([(m - 4, ctop - 7), (m + 4, ctop - 7), (m, ctop + 1)], fill=(222, 160, 84, 255), outline=OL)
+    d.line([(m - 2, ctop - 6), (m + 1, ctop - 3)], fill=(176, 116, 56, 255))
+    d.line([(m + 2, ctop - 6), (m - 1, ctop - 3)], fill=(176, 116, 56, 255))
+    d.ellipse([m - 6, ctop - 15, m + 6, ctop - 5], fill=(255, 110, 168, 255), outline=OL)
+    d.ellipse([m - 5, ctop - 22, m + 5, ctop - 13], fill=(255, 244, 214, 255), outline=OL)
+    d.point((m - 3, ctop - 19), fill=WHITE_C)
+    d.point((m - 3, ctop - 11), fill=(255, 190, 214, 255))
+    d.rectangle([m, ctop - 24, m + 1, ctop - 23], fill=(228, 0, 60, 255))
+    return img
+
+
+def chiller_redbull():
+    hs = 80
+    img, d = new(56, hs)
+    SIL_T, SIL_L, SIL_R = (226, 232, 240, 255), (196, 206, 218, 255), (150, 162, 180, 255)
+    RB_RED, RB_BLUE, RB_YEL = (214, 24, 50, 255), (30, 66, 156, 255), (255, 204, 0, 255)
+    hw, h = 28, 50
+    bx, by = 28, hs
+    HDR = 17
+    sbox(d, bx, by, hw, h, SIL_T, SIL_L, SIL_R, WHITE_C)
+    bull = ["......X.X.",
+            "XXXXXXXXX.",
+            "XXXXXXXXXX",
+            "XXXXXXXXX.",
+            "XXXXXXXXX.",
+            "X.X...X.X.",
+            "X.X...X.X."]
+
+    mini = ["....X.X.",
+            "XXXXXXX.",
+            "XXXXXX..",
+            "XXXXXX..",
+            "X.X.X..."]
+
+    def sun(fl, x0, y0, k, sz=6):
+        fd = ImageDraw.Draw(fl)
+        fd.ellipse([x0, y0, x0 + sz, y0 + sz], fill=shade(RB_YEL, k), outline=(200, 120, 0, 255))
+        fl.putpixel((x0 + 2, y0 + 2), (255, 244, 170, 255))
+
+    # papan tanda merah-kuning
+    for face, k in (('L', 1.0), ('R', 0.82)):
+        fl, fd = new(hw - 1, HDR)
+        if face == 'L':
+            fd.rectangle([0, 0, hw - 2, HDR - 1], fill=shade(RB_RED, k))
+            pixel_text(fl, (0, -1), 'Red Bull', 7, (255, 255, 255, 255))
+            sun(fl, 11, 9, k, 4)
+            flat_rows(fl, 1, 9, mini, shade(RB_YEL, k))
+            flat_rows(fl, hw - 1 - 8, 9, [r[::-1] for r in mini], shade(RB_YEL, k))
+        else:
+            fd.rectangle([0, 0, hw - 2, HDR - 1], fill=shade((238, 242, 248, 255), k))
+            sun(fl, 10, 5, k)
+            flat_rows(fl, 0, 5, bull, shade(RB_RED, k))
+            flat_rows(fl, hw - 1 - 10, 5, [r[::-1] for r in bull], shade(RB_RED, k))
+        fd.line([(0, 0), (hw - 2, 0)], fill=shade(RB_YEL, k))
+        fd.line([(0, HDR - 1), (hw - 2, HDR - 1)], fill=shade(RB_YEL, k))
+        fd.line([(0, HDR - 2), (hw - 2, HDR - 2)], fill=shade(RB_RED, k))
+        face_paste(img, fl, bx, by, hw, h, face, 0, 0)
+    # pintu kaca + 3 rak tin biru-perak
+    gh = h - HDR - 4
+    for face, k in (('L', 1.0), ('R', 0.82)):
+        W = hw - 3
+        fl, fd = new(W, gh)
+        fd.rectangle([0, 0, W - 1, gh - 1], fill=(64, 70, 82, 255))
+        gt, gb = (186, 232, 255), (116, 188, 240)
+        for y in range(1, gh - 1):
+            t = (y - 1) / max(1, gh - 3)
+            col = tuple(int(gt[i] + (gb[i] - gt[i]) * t) for i in range(3))
+            fd.line([(1, y), (W - 2, y)], fill=col + (255,))
+        sh = (gh - 2) // 3
+        for s in range(3):
+            y0 = 1 + s * sh
+            for i in range(5):
+                x0 = 2 + i * 4
+                blue = (i + s) % 2 == 0
+                body = RB_BLUE if blue else (214, 220, 228, 255)
+                fd.rectangle([x0, y0 + 1, x0 + 2, y0 + sh - 3], fill=body)
+                fd.line([(x0, y0 + 1), (x0 + 2, y0 + 1)], fill=(250, 250, 252, 255))
+                fd.point((x0 + 1, y0 + sh - 5), fill=RB_RED if blue else RB_BLUE)
+            fd.line([(1, y0 + sh - 2), (W - 2, y0 + sh - 2)], fill=(120, 126, 140, 255))
+        for i in range(3):  # kilau sejuk
+            fl.putpixel((2 + i, 2 + i), WHITE_C)
+        if k != 1.0:
+            fl = shade_img(fl, k)
+        face_paste(img, fl, bx, by, hw, h, face, 1, HDR)
+    return img
+
+
 def build(preview=None):
     OUT.mkdir(parents=True, exist_ok=True)
 
@@ -1273,6 +1534,8 @@ def build(preview=None):
         **{f'sofa_{name}': sofa(color) for name, color in GOOGLE.items()},
         'table': table(), 'reception': reception(), 'bell': bell(),
         'snooker': snooker(), 'fridge': fridge(), 'wc': wc(), 'sink': sink(), 'boardtable': boardtable(),
+        'machine_starbucks': machine_starbucks(), 'machine_zus': machine_zus(),
+        'icecream': machine_icecream(), 'chiller_redbull': chiller_redbull(),
         'floor_a': floor_tile((238, 224, 196, 255), 1), 'floor_b': floor_tile((226, 208, 174, 255), 2),
     }
     for name, img in assets.items():

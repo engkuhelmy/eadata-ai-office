@@ -123,20 +123,22 @@ export const DEPARTMENTS = {
     },
 
     // Pantry: kaunter dengan mesin kopi, peti sejuk, dan meja makan. Staff ambil minuman.
+    // Maksimum 2 orang serentak (capacity). Yang ketiga dan seterusnya beratur di queue sampai ada kekosongan.
+    // Setiap stand di depan satu mesin berjenama (label jadi bubble: "Starbucks", "ZUS Coffee", ...).
     pantry: {
         label: 'Pantry',
         spot: { c: 24, r: 3 },
+        capacity: 2,
         cells: [
-            { c: 23, r: 1, kind: 'machine' }, { c: 24, r: 1, kind: 'machine' }, { c: 25, r: 1, kind: 'machine' },
-            { c: 26, r: 1, kind: 'fridge' }, { c: 27, r: 1, kind: 'fridge' },
+            { c: 23, r: 1, kind: 'machine_starbucks' }, { c: 24, r: 1, kind: 'machine_zus' }, { c: 25, r: 1, kind: 'icecream' },
+            { c: 26, r: 1, kind: 'chiller_redbull' }, { c: 27, r: 1, kind: 'chiller_redbull' },
             { c: 24, r: 4, kind: 'table' }, { c: 25, r: 4, kind: 'table' },
         ],
         stands: [
-            { c: 24, r: 2, act: 'drink' }, { c: 25, r: 2, act: 'drink' }, { c: 23, r: 2, act: 'drink' },
-            { c: 24, r: 5, act: 'drink' }, { c: 25, r: 5, act: 'drink' }, { c: 23, r: 4, act: 'drink' },
-            { c: 26, r: 4, flip: true, act: 'drink' }, { c: 26, r: 2, act: 'drink' }, { c: 23, r: 5, act: 'drink' },
-            { c: 26, r: 5, flip: true, act: 'drink' },
+            { c: 23, r: 2, act: 'drink', label: 'Starbucks' }, { c: 24, r: 2, act: 'drink', label: 'ZUS Coffee' },
+            { c: 25, r: 2, act: 'drink', label: 'Baskin Robbins' }, { c: 26, r: 2, act: 'drink', label: 'Red Bull' },
         ],
+        queue: [{ c: 24, r: 6 }, { c: 25, r: 6 }, { c: 23, r: 6 }, { c: 26, r: 6 }, { c: 24, r: 7 }, { c: 25, r: 7 }],
     },
 
     // Toilet: singki di belakang, kubikel di bawah. Staff berdiri sekejap.
@@ -228,6 +230,15 @@ export function seatsFor(department) {
 // Tempat berdiri (briefing, bilik bermain, pantry, toilet)
 export function standsFor(department) {
     return DEPARTMENTS[department]?.stands ?? [];
+}
+
+// Had orang serentak (cth. pantry = 2) dan tempat beratur bila penuh
+export function capacityFor(department) {
+    return DEPARTMENTS[department]?.capacity ?? null;
+}
+
+export function queueFor(department) {
+    return DEPARTMENTS[department]?.queue ?? [];
 }
 
 export function allSeats() {

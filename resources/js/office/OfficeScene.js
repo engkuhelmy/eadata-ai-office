@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { AVATARS, GRID, TILE, ORIGIN, CANVAS, DEPARTMENTS, DEPT_BUBBLE, DECOR, VENDOR_COLORS, allSeats, blockedTiles, seatsFor, spotFor, standsFor } from './layout';
+import { AVATARS, GRID, TILE, ORIGIN, CANVAS, DEPARTMENTS, DEPT_BUBBLE, DECOR, VENDOR_COLORS, allSeats, blockedTiles, capacityFor, queueFor, seatsFor, spotFor, standsFor } from './layout';
 import { findPath } from './pathfinding';
 
 const WALK_SPEED = 110; // px per saat
@@ -215,6 +215,7 @@ export default class OfficeScene extends Phaser.Scene {
         }
         for (const name of ['floor_a', 'floor_b', 'desk', 'plant', 'shelf', 'cooler', 'machine', 'server', 'pong', 'foos', 'table', 'reception', 'bell',
             'snooker', 'fridge', 'wc', 'sink', 'boardtable',
+            'machine_starbucks', 'machine_zus', 'icecream', 'chiller_redbull',
             ...GOOGLE_COLORS.map((c) => `chair_${c}`), ...GOOGLE_COLORS.map((c) => `sofa_${c}`)]) {
             this.load.image(name, `/assets/office/${name}.png`);
         }
@@ -570,17 +571,40 @@ export default class OfficeScene extends Phaser.Scene {
         };
     }
 
-    // Ambil kerusi kosong (duduk), atau tempat berdiri kosong (bilik bermain). Kalau penuh = berdiri di spot.
+    // Berapa orang (selain s) sedang memegang tempat berdiri dalam department ini
+    standOccupants(dept, except) {
+        return standsFor(dept).filter((cell) => {
+            const owner = this.seatOwner.get(`${cell.c},${cell.r}`);
+            return owner !== undefined && owner !== except?.id;
+        }).length;
+    }
+
+    // Ambil kerusi kosong (duduk), atau tempat berdiri kosong (bilik bermain, pantry...).
+    // Department dengan had (pantry = 2): bila penuh, staff beratur di luar sampai ada kekosongan.
+    // Kalau tiada tempat langsung = berdiri di spot.
     walkTo(s, dept) {
         this.releaseSeat(s);
 
         const free = (cell) => !this.seatOwner.has(`${cell.c},${cell.r}`);
+        const cap = capacityFor(dept);
         let slot = null;
         let sits = false;
+        let queued = false;
+
         if (!s.leaving) {
             slot = seatsFor(dept).find(free) ?? null;
             sits = slot !== null;
-            if (!slot) slot = standsFor(dept).find(free) ?? null;
+
+            if (!slot) {
+                if (cap !== null && this.standOccupants(dept, s) >= cap) {
+                    slot = queueFor(dept).find(free) ?? null;
+                    queued = slot !== null;
+                } else {
+                    const stands = standsFor(dept).filter(free);
+                    // Pantry: pilih mesin rawak supaya semua jenama dapat giliran. Lain-lain ikut susunan.
+                    slot = (cap !== null ? stands[Math.floor(Math.random() * stands.length)] : stands[0]) ?? null;
+                }
+            }
         }
         if (slot) {
             s.seat = `${slot.c},${slot.r}`;
@@ -591,12 +615,25 @@ export default class OfficeScene extends Phaser.Scene {
         const path = findPath(s.tile, target, BLOCKED, GRID.cols, GRID.rows);
 
         s.sitting = sits;
+        s.queued = queued;
         s.standFlip = slot?.flip === true;
-        s.act = sits ? null : slot?.act ?? null; // play | dart | drink
+        s.standLabel = queued ? null : slot?.label ?? null;
+        s.act = sits || queued ? null : slot?.act ?? null; // play | dart | drink
         s.offset = sits ? { ...SEAT_SHIFT } : slot ? { x: 0, y: 0 } : offsetFor(s.id);
         s.path = path ?? [];
         s.dept = dept;
         s.exitAt = null;
+    }
+
+    // Staff yang beratur: bila ada tempat kosong, naik ke giliran dan terus ke mesin.
+    tryPromote(s) {
+        const cap = capacityFor(s.dept);
+        if (!s.queued || s.leaving || cap === null) return;
+        if (this.standOccupants(s.dept, s) >= cap) return;
+
+        this.walkTo(s, s.dept);
+        s.lastText = null;
+        this.updateVisuals(s, s.agent);
     }
 
     releaseSeat(s) {
@@ -669,7 +706,7 @@ export default class OfficeScene extends Phaser.Scene {
         }
 
         // Tiada tugas: bubble ikut bilik (Toilet break, Pantry, Chill...) sebelum status
-        const text = a.current_task || DEPT_BUBBLE[s.dept] || STATUS_TEXT[a.status] || '';
+        const text = a.current_task || (s.queued ? 'Beratur...' : s.standLabel) || DEPT_BUBBLE[s.dept] || STATUS_TEXT[a.status] || '';
         s.bubble.setVisible(text !== '');
         if (text !== s.lastText) {
             s.lastText = text;
@@ -750,6 +787,15 @@ export default class OfficeScene extends Phaser.Scene {
         if (this.screenTimer > 120) {
             this.screenTimer = 0;
             for (const sc of this.screens) this.drawScreen(sc, time);
+        }
+
+        // Giliran pantry: setiap 0.6s, staff yang beratur naik bila ada kekosongan
+        this.queueTimer = (this.queueTimer ?? 0) + delta;
+        if (this.queueTimer > 600) {
+            this.queueTimer = 0;
+            for (const s of this.staff.values()) {
+                if (s.queued) this.tryPromote(s);
+            }
         }
 
         const step = (WALK_SPEED * delta) / 1000;
