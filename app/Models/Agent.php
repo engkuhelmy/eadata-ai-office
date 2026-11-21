@@ -15,9 +15,21 @@ class Agent extends Model
     public const STATUS_ENDED = 'ended';
 
     protected $fillable = [
-        'vendor', 'session_id', 'label', 'name', 'pc', 'project',
-        'department', 'status', 'current_task', 'last_event_at', 'ended_at',
+        'vendor', 'session_id', 'label', 'name', 'custom_name', 'pc', 'project',
+        'department', 'pinned_department', 'status', 'current_task', 'last_event_at', 'ended_at',
     ];
+
+    /** Nama yang dipaparkan: nama yang owner tetapkan, atau nama automatik. */
+    public function displayName(): ?string
+    {
+        return $this->custom_name ?: $this->name;
+    }
+
+    /** Department yang dipaparkan: department yang di-pin, atau ikut event terakhir. */
+    public function effectiveDepartment(): ?string
+    {
+        return $this->pinned_department ?: $this->department;
+    }
 
     protected function casts(): array
     {

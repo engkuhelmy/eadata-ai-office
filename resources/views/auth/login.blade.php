@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Login · AI Office Hub</title>
+    <title>Login · AI Office Hub · EA Clouds Technology</title>
     <style>
         body { font-family: system-ui, sans-serif; background: #1d1a17; color: #f5efe6; margin: 0; display: grid; place-items: center; min-height: 100vh; }
         form { width: min(340px, 90vw); display: grid; gap: 12px; }
@@ -16,7 +16,13 @@
 <body>
     <form method="POST" action="{{ route('login') }}">
         @csrf
-        <h1 style="margin:0;font-size:22px;">AI Office Hub</h1>
+        <div style="display:flex;align-items:center;gap:12px;">
+            <img src="/assets/office/brand_logo.png" alt="EA Clouds Technology" style="width:64px;height:44px;image-rendering:pixelated;border-radius:4px;">
+            <div>
+                <h1 style="margin:0;font-size:22px;">AI Office Hub</h1>
+                <div style="font-size:12px;color:#78beeb;letter-spacing:.6px;text-transform:uppercase;margin-top:2px;">EA Clouds Technology</div>
+            </div>
+        </div>
         @if ($errors->any())
             <div class="error">{{ $errors->first() }}</div>
         @endif

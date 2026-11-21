@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
-import { GRID, TILE, ORIGIN, CANVAS, DEPARTMENTS, DECOR, VENDOR_COLORS, blockedTiles, spotFor } from './layout';
+import { GRID, TILE, ORIGIN, CANVAS, DEPARTMENTS, DECOR, VENDOR_COLORS, allSeats, blockedTiles, seatsFor, spotFor } from './layout';
 import { findPath } from './pathfinding';
 
 const WALK_SPEED = 110; // px per saat
 const EXIT_DELAY_MS = 10000; // staff hilang 10s lepas sampai pintu
 const WALL_H = 130;
+// Kerusi (dan staff yang duduk) dirapatkan ke meja: 40% ke arah tile meja (c, r-1)
+const SEAT_SHIFT = { x: 11, y: -6 };
 const BLOCKED = blockedTiles();
 
 const C = {
@@ -171,6 +173,7 @@ export default class OfficeScene extends Phaser.Scene {
     constructor() {
         super('office');
         this.staff = new Map();
+        this.seatOwner = new Map(); // "c,r" -> staff id
         this.screens = [];
         this.deptState = {};
         this.pending = null;
@@ -184,7 +187,8 @@ export default class OfficeScene extends Phaser.Scene {
         for (const layer of ['fixed', 'skin', 'hair', 'shirt']) {
             this.load.spritesheet(`staff_${layer}`, `/assets/office/staff_${layer}.png`, { frameWidth: 32, frameHeight: 48 });
         }
-        for (const name of ['wall_window_a', 'wall_window_b', 'wall_board_a', 'wall_cork_b', 'wall_poster_a1', 'wall_poster_a2', 'wall_poster_b', 'wall_logo_b']) {
+        for (const name of ['wall_window_a', 'wall_window_b', 'wall_board_a', 'wall_cork_b', 'wall_poster_a1', 'wall_poster_a2', 'wall_poster_b', 'wall_logo_b',
+            'partition_a', 'partition_b', 'partition_a_logo', 'partition_b_logo']) {
             this.load.image(name, `/assets/office/${name}.png`);
         }
         for (const name of ['floor_a', 'floor_b', 'desk', 'chair', 'plant', 'shelf', 'cooler', 'sofa', 'machine', 'server', 'pong', 'foos', 'table', 'reception', 'bell']) {
@@ -309,11 +313,11 @@ export default class OfficeScene extends Phaser.Scene {
 
     // Furniture statik + skrin monitor (skrin dikemaskini dalam update)
     drawStatic() {
-        // Kerusi di spot setiap department meja (staff duduk di sini, di belakang sprite)
-        for (const dept of Object.values(DEPARTMENTS)) {
-            if (!dept.cells.some((cell) => cell.kind === 'desk')) continue;
-            // Kerusi pejabat (sprite), pangkal di bawah kaki staff
-            this.placeSprite('chair', dept.spot.c, dept.spot.r, dept.spot.c + dept.spot.r - 0.2, 6);
+        // Kerusi di setiap seat. Sandaran menghadap kamera dan dilukis DI DEPAN staff yang duduk
+        // (depth +0.6 vs staff +0.5), jadi nampak macam duduk membelakangkan kita, menghadap meja.
+        for (const seat of allSeats()) {
+            const { x, y } = tileCenter(seat.c, seat.r);
+            this.add.image(x + SEAT_SHIFT.x, y + SEAT_SHIFT.y + 3, 'chair').setOrigin(0.5, 37 / 40).setDepth(seat.c + seat.r + 0.6);
         }
 
         for (const [key, dept] of Object.entries(DEPARTMENTS)) {
@@ -477,18 +481,39 @@ export default class OfficeScene extends Phaser.Scene {
             path: [],
             dept: null,
             seated: false,
+            seat: null,
             leaving: false,
             exitAt: null,
         };
     }
 
+    // Ambil kerusi kosong dalam department. Tiada kerusi kosong atau department tanpa kerusi = berdiri di spot.
     walkTo(s, dept) {
-        const target = spotFor(dept);
+        this.releaseSeat(s);
+
+        let seat = null;
+        if (!s.leaving) {
+            seat = seatsFor(dept).find((cell) => !this.seatOwner.has(`${cell.c},${cell.r}`)) ?? null;
+        }
+        if (seat) {
+            s.seat = `${seat.c},${seat.r}`;
+            this.seatOwner.set(s.seat, s.id);
+        }
+
+        const target = seat ?? spotFor(dept);
         const path = findPath(s.tile, target, BLOCKED, GRID.cols, GRID.rows);
 
+        s.offset = seat ? { ...SEAT_SHIFT } : offsetFor(s.id);
         s.path = path ?? [];
         s.dept = dept;
         s.exitAt = null;
+    }
+
+    releaseSeat(s) {
+        if (s.seat && this.seatOwner.get(s.seat) === s.id) {
+            this.seatOwner.delete(s.seat);
+        }
+        s.seat = null;
     }
 
     // Dipanggil setiap kali state berubah. agents = senarai agent (tanpa yang dah ended).
@@ -597,14 +622,15 @@ export default class OfficeScene extends Phaser.Scene {
         if (moving) {
             frame = 2 + (Math.floor(time / 130) % 4);
         } else if (s.seated) {
-            frame = 6 + (Math.floor(time / 120) % 2);
+            // Duduk membelakangkan kamera, menaip menghadap meja
+            frame = 8 + (Math.floor(time / 140) % 2);
         } else {
             frame = Math.floor(time / 700) % 2;
         }
 
         for (const layer of s.layers) {
             layer.setFrame(frame);
-            layer.setFlipX(s.facingLeft);
+            layer.setFlipX(s.seated ? false : s.facingLeft);
         }
     }
 
@@ -643,7 +669,7 @@ export default class OfficeScene extends Phaser.Scene {
                 }
             }
 
-            s.seated = !moving && !s.leaving && (DEPARTMENTS[s.dept]?.cells ?? []).some((c) => c.kind === 'desk');
+            s.seated = !moving && !s.leaving && s.seat !== null;
             this.animateFigure(s, time, moving);
 
             const bob = moving ? Math.sin(time / 90) * 1.2 : 0;
@@ -654,6 +680,7 @@ export default class OfficeScene extends Phaser.Scene {
             if (!moving && s.leaving && s.tile.c === doorSpot.c && s.tile.r === doorSpot.r) {
                 if (s.exitAt === null) s.exitAt = time + EXIT_DELAY_MS;
                 if (time >= s.exitAt) {
+                    this.releaseSeat(s);
                     s.container.destroy();
                     this.staff.delete(id);
                 }

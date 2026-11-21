@@ -37,6 +37,7 @@ export const DEPARTMENTS = {
     meeting: {
         label: 'Client Meeting',
         spot: { c: 10, r: 6 },
+        seats: [{ c: 9, r: 5 }, { c: 10, r: 5 }, { c: 11, r: 5 }],
         cells: [
             { c: 9, r: 3, kind: 'table' }, { c: 10, r: 3, kind: 'table' }, { c: 11, r: 3, kind: 'table' },
             { c: 9, r: 4, kind: 'table' }, { c: 10, r: 4, kind: 'table' }, { c: 11, r: 4, kind: 'table' },
@@ -80,7 +81,12 @@ export const DEPARTMENTS = {
 // Dekor: hiasan yang juga disekat (kecuali yang tiada cells)
 export const DECOR = [
     { kind: 'shelf', cells: [{ c: 4, r: 1 }, { c: 5, r: 1 }] },
-    { kind: 'shelf', cells: [{ c: 1, r: 11 }, { c: 1, r: 12 }] },
+    { kind: 'shelf', cells: [{ c: 1, r: 9 }, { c: 1, r: 10 }] },
+    // Partition separuh tinggi: bilik reception (kiri bawah) dan break room (kanan bawah)
+    { kind: 'partition_a', cells: [{ c: 2, r: 11 }, { c: 3, r: 11 }, { c: 4, r: 11 }, { c: 15, r: 12 }, { c: 17, r: 12 }] },
+    { kind: 'partition_a_logo', cells: [{ c: 16, r: 12 }] },
+    { kind: 'partition_b', cells: [{ c: 5, r: 13 }, { c: 14, r: 13 }, { c: 14, r: 14 }] },
+    { kind: 'partition_b_logo', cells: [{ c: 5, r: 12 }] },
     { kind: 'plant', cells: [{ c: 1, r: 4 }] },
     { kind: 'plant', cells: [{ c: 21, r: 6 }] },
     { kind: 'plant', cells: [{ c: 13, r: 15 }] },
@@ -116,6 +122,19 @@ export function blockedTiles() {
     }
 
     return set;
+}
+
+// Kerusi untuk duduk: satu di depan setiap meja (r + 1), atau senarai seats eksplisit
+export function seatsFor(department) {
+    const dept = DEPARTMENTS[department];
+    if (!dept) return [];
+    if (dept.seats) return dept.seats;
+
+    return dept.cells.filter((cell) => cell.kind === 'desk').map((cell) => ({ c: cell.c, r: cell.r + 1 }));
+}
+
+export function allSeats() {
+    return Object.keys(DEPARTMENTS).flatMap((key) => seatsFor(key));
 }
 
 export function spotFor(department) {

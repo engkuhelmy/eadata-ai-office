@@ -14,4 +14,5 @@ Route::post('/logout', [LoginController::class, 'destroy'])->name('logout')->mid
 Route::middleware('auth')->group(function () {
     Route::get('/', [OfficeController::class, 'index'])->name('office');
     Route::get('/office/state', [OfficeController::class, 'state'])->name('office.state');
+    Route::patch('/office/agents/{agent}', [OfficeController::class, 'update'])->name('office.agents.update');
 });

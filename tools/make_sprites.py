@@ -144,6 +144,59 @@ def figure(dy=0, seated=False, lx=0, rx=0, llift=0, rlift=0, al=0, ar=0, typing=
     return b
 
 
+def add_outline(b):
+    cells = set(b.px)
+    for x in range(-1, FW + 1):
+        for y in range(-1, FH + 1):
+            if (x, y) in cells:
+                continue
+            if any((x + dx, y + dy_) in cells for dx, dy_ in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                b.put(x, y, 'outline', 1)
+    return b
+
+
+def figure_back(typing=0):
+    """Duduk dari belakang, menghadap meja (macam staff dalam gambar rujukan)."""
+    b = Buf()
+    y0 = 10
+
+    # Kepala dari belakang: rambut penuh, tengkuk dan telinga nampak sedikit
+    for row in range(11):
+        x0, x1 = (12, 20) if row in (0, 9) else (13, 19) if row == 10 else (11, 21)
+        for x in range(x0, x1 + 1):
+            shade = 2 if row <= 2 else 1 if row <= 6 else 0
+            b.put(x, y0 + row, 'hair', shade)
+    for x in (14, 15, 16, 17, 18):
+        b.put(x, y0 + 10, 'skin', 0)
+    for row in (5, 6):
+        b.put(10, y0 + row, 'skin', 1)
+        b.put(22, y0 + row, 'skin', 0)
+
+    # Badan (belakang hoodie) dengan hood
+    yt = y0 + 12
+    for x in (15, 16, 17):
+        b.put(x, yt - 1, 'skin', 0)
+    for row in range(14):
+        for x in range(11, 21):
+            shade = 2 if x <= 12 else 0 if x >= 19 else 1
+            b.put(x, yt + row, 'shirt', shade)
+    for x in range(13, 20):
+        b.put(x, yt, 'shirt', 0)
+        b.put(x, yt + 1, 'shirt', 0)
+    for x in range(14, 19):
+        b.put(x, yt + 2, 'shirt', 0)
+
+    # Lengan atas di sisi, siku bergerak bila menaip
+    for side, x0 in ((0, 8), (1, 21)):
+        lift = (typing + side) % 2
+        for row in range(7):
+            for i in range(3):
+                shade = (2, 1, 1)[i] if side == 0 else (1, 1, 0)[i]
+                b.put(x0 + i, yt + 1 + row - lift, 'shirt', shade)
+
+    return add_outline(b)
+
+
 FRAMES = [
     dict(dy=0),
     dict(dy=1),
@@ -153,13 +206,15 @@ FRAMES = [
     dict(llift=2, dy=-1),
     dict(dy=4, seated=True, typing=0),
     dict(dy=4, seated=True, typing=1),
+    dict(back=True, typing=0),
+    dict(back=True, typing=1),
 ]
 
 
 def staff_sheets():
     sheets = {name: Image.new('RGBA', (FW * len(FRAMES), FH), (0, 0, 0, 0)) for name in ('fixed', 'skin', 'hair', 'shirt')}
     for index, pose in enumerate(FRAMES):
-        buf = figure(**pose)
+        buf = figure_back(pose['typing']) if pose.get('back') else figure(**pose)
         for (x, y), (role, shade) in buf.px.items():
             ox = index * FW + x
             if role in FIXED:
@@ -215,17 +270,46 @@ def desk():
 
 
 def chair():
+    """Kerusi pejabat dilihat dari belakang. Tanah pada y=37. Sandaran rendah supaya
+    kepala dan bahu staff yang duduk nampak di atasnya (macam gambar rujukan)."""
     img, d = new(32, 40)
-    d.line([(16, 34), (5, 38)], fill=(60, 60, 68, 255), width=2)
-    d.line([(16, 34), (27, 38)], fill=(60, 60, 68, 255), width=2)
-    d.line([(16, 34), (16, 39)], fill=(60, 60, 68, 255), width=2)
-    d.line([(16, 34), (9, 39)], fill=(60, 60, 68, 255), width=1)
-    d.line([(16, 34), (23, 39)], fill=(60, 60, 68, 255), width=1)
-    d.rectangle([15, 26, 17, 34], fill=(52, 52, 60, 255))
-    d.rounded_rectangle([7, 21, 25, 27], radius=2, fill=(48, 48, 56, 255), outline=OL)
-    d.rounded_rectangle([9, 3, 23, 22], radius=3, fill=(42, 42, 50, 255), outline=OL)
-    d.line([(11, 6), (21, 6)], fill=(86, 86, 96, 255))
-    d.line([(11, 8), (11, 18)], fill=(72, 72, 82, 255))
+    base = (60, 60, 68, 255)
+    for end in ((5, 37), (27, 37), (10, 39), (22, 39)):
+        d.line([(16, 34), end], fill=base, width=2)
+    for x in (5, 27, 10, 22):
+        d.point((x, 38 if x in (5, 27) else 39), fill=(30, 30, 34, 255))
+    d.rectangle([15, 27, 17, 34], fill=(52, 52, 60, 255))
+    d.rounded_rectangle([5, 23, 27, 28], radius=2, fill=(52, 52, 60, 255), outline=OL)
+    d.rectangle([3, 20, 6, 27], fill=(44, 44, 52, 255), outline=OL)
+    d.rectangle([26, 20, 29, 27], fill=(44, 44, 52, 255), outline=OL)
+    d.rounded_rectangle([8, 12, 24, 25], radius=3, fill=(40, 40, 48, 255), outline=OL)
+    d.line([(10, 14), (22, 14)], fill=(88, 88, 100, 255))
+    d.line([(10, 15), (10, 22)], fill=(70, 70, 82, 255))
+    return img
+
+
+def partition():
+    """Dinding separuh (partition) sepanjang paksi c, macam bilik dalam gambar rujukan.
+    Tile center pada (28, 66). Flip mendatar untuk paksi r."""
+    img, d = new(56, 80)
+    cream, cap, base, edge = (236, 218, 184, 255), (250, 240, 220, 255), (196, 150, 98, 255), (214, 192, 156, 255)
+    h = 46
+    a, b = (14, 59), (42, 73)
+    d.polygon([a, b, (b[0], b[1] - h), (a[0], a[1] - h)], fill=cream, outline=OL)
+    d.polygon([(a[0], a[1] - 6), (b[0], b[1] - 6), b, a], fill=base, outline=OL)
+    d.polygon([(a[0], a[1] - h), (b[0], b[1] - h), (b[0] + 4, b[1] - h - 2), (a[0] + 4, a[1] - h - 2)], fill=cap, outline=OL)
+    d.polygon([(b[0], b[1] - h), (b[0] + 4, b[1] - h - 2), (b[0] + 4, b[1] - 2), b], fill=edge, outline=OL)
+    return img
+
+
+def partition_poster():
+    """Partition dengan poster awan EA (tanpa teks supaya boleh di-flip)."""
+    img = partition()
+    d = ImageDraw.Draw(img)
+    d.polygon([(20, 24), (36, 32), (36, 52), (20, 44)], fill=(250, 246, 232, 255), outline=OL)
+    sky, line = (120, 190, 235, 255), (40, 90, 160, 255)
+    d.polygon([(22, 33), (26, 29), (31, 31), (34, 36), (34, 41), (22, 35)], fill=sky, outline=line)
+    d.line([(24, 39), (33, 43)], fill=(24, 54, 120, 255))
     return img
 
 
@@ -486,6 +570,9 @@ def build(preview=None):
         'wall_board_a': shear(wall_board(), 'A'), 'wall_cork_b': shear(wall_cork(), 'B'),
         'wall_poster_a1': shear(wall_poster('chart'), 'A'), 'wall_poster_a2': shear(wall_poster('sun'), 'A'),
         'wall_poster_b': shear(wall_poster('sun'), 'B'), 'wall_logo_b': shear(wall_logo(), 'B'),
+        'brand_logo': wall_logo(),
+        'partition_a': partition(), 'partition_b': partition().transpose(Image.FLIP_LEFT_RIGHT),
+        'partition_a_logo': partition_poster(), 'partition_b_logo': partition_poster().transpose(Image.FLIP_LEFT_RIGHT),
     }
     for name, img in walls.items():
         img.save(OUT / f'{name}.png')
@@ -497,7 +584,7 @@ def build(preview=None):
         'desk': desk(), 'chair': chair(), 'plant': plant(), 'shelf': shelf(), 'cooler': cooler(),
         'sofa': sofa(), 'machine': machine(), 'server': server(), 'pong': pong(), 'foos': foos(),
         'table': table(), 'reception': reception(), 'bell': bell(),
-        'floor_a': floor_tile((217, 163, 106, 255), 1), 'floor_b': floor_tile((201, 143, 88, 255), 2),
+        'floor_a': floor_tile((234, 180, 114, 255), 1), 'floor_b': floor_tile((206, 142, 82, 255), 2),
     }
     for name, img in assets.items():
         img.save(OUT / f'{name}.png')
