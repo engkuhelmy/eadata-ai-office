@@ -1,0 +1,8 @@
+<?php
+
+use App\Http\Controllers\IngestController;
+use Illuminate\Support\Facades\Route;
+
+Route::post('/ingest', IngestController::class)
+    ->middleware(['device.token', 'throttle:ingest'])
+    ->name('api.ingest');

@@ -1,0 +1,15 @@
+{
+  "_source": "Dibina dari skema docs Codex hooks (learn.chatgpt.com/docs/hooks). BUKAN payload sebenar. Ganti bila Codex dipasang.",
+  "session_id": "codex-session-01",
+  "transcript_path": null,
+  "cwd": "C:\\Users\\Helmi\\projek\\eadata-web",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-5-codex",
+  "permission_mode": "default",
+  "turn_id": "turn-2",
+  "tool_name": "Bash",
+  "tool_use_id": "call-1",
+  "tool_input": {"command": "pytest -q"},
+  "pc": "HELMY-PC",
+  "ts": "2026-11-21T10:00:00+08:00"
+}

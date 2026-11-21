@@ -1,0 +1,14 @@
+{
+  "session_id": "3f9a1c2e-claude-session-01",
+  "cwd": "C:\\Users\\Helmi\\projek\\eadata-web",
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "npm run build"
+  },
+  "tool_response": {
+    "is_error": true
+  },
+  "pc": "HELMY-PC",
+  "ts": "2026-11-21T09:06:00+08:00"
+}

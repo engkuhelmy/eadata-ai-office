@@ -1,0 +1,12 @@
+{
+  "session_id": "3f9a1c2e-claude-session-01",
+  "cwd": "C:\\Users\\Helmi\\projek\\eadata-web",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Task",
+  "tool_input": {
+    "description": "Cari harga VPS",
+    "subagent_type": "general-purpose"
+  },
+  "pc": "HELMY-PC",
+  "ts": "2026-11-21T09:05:00+08:00"
+}

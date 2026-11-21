@@ -1,0 +1,12 @@
+{
+  "session_id": "3f9a1c2e-claude-session-01",
+  "cwd": "C:\\Users\\Helmi\\projek\\eadata-web",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Write",
+  "tool_input": {
+    "file_path": "app/Http/Controllers/UserController.php",
+    "content": "<?php // isi fail TAK boleh sampai ke server"
+  },
+  "pc": "HELMY-PC",
+  "ts": "2026-11-21T09:02:00+08:00"
+}

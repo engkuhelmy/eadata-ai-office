@@ -1,0 +1,13 @@
+{
+  "session_id": "3f9a1c2e-claude-session-01",
+  "cwd": "C:\\Users\\Helmi\\projek\\eadata-web",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "resources/js/components/Navbar.vue",
+    "old_string": "<nav>lama</nav>",
+    "new_string": "<nav>baru</nav>"
+  },
+  "pc": "HELMY-PC",
+  "ts": "2026-11-21T09:01:00+08:00"
+}

@@ -1,0 +1,11 @@
+{
+  "session_id": "3f9a1c2e-claude-session-01",
+  "cwd": "C:\\Users\\Helmi\\projek\\eadata-web",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "git push origin main --token ghp_abcdefghijklmnopqrstuvwxyz0123456789"
+  },
+  "pc": "HELMY-PC",
+  "ts": "2026-11-21T09:04:00+08:00"
+}

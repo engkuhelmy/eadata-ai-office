@@ -1,0 +1,11 @@
+{
+  "session_id": "3f9a1c2e-claude-session-01",
+  "cwd": "C:\\Users\\Helmi\\projek\\eadata-web",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "php artisan test --filter=OfficeAdaptersTest"
+  },
+  "pc": "HELMY-PC",
+  "ts": "2026-11-21T09:03:00+08:00"
+}
