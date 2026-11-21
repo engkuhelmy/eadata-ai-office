@@ -1,0 +1,22 @@
+﻿{
+    "_source":  "Payload sebenar ditangkap dari agy 1.5.5 (Windows) selepas ditapis oleh office-hook.",
+    "_event":  "PostToolUse",
+    "conversationId":  "1353529e-17a5-4693-a9f0-d46adb84819c",
+    "cwd":  "C:\\Users\\Helmi\\Desktop\\ai office virtual 3D",
+    "error":  "",
+    "hookEventName":  "PostToolUse",
+    "modelName":  "gemini-3.8-flash-high",
+    "stepIdx":  2,
+    "toolCall":  {
+                     "name":  "run_command",
+                     "args":  {
+                                  "CommandLine":  "Get-ChildItem"
+                              }
+                 },
+    "workspacePaths":  [
+                           "C:\\Users\\Helmi\\Desktop\\ai office virtual 3D"
+                       ],
+    "promptHash":  "45a4b64c8a86",
+    "pc":  "EngkuHelmyPC",
+    "ts":  "2026-11-21T14:31:12+08:00"
+}

@@ -174,9 +174,10 @@ def post(config, src, event, body):
         with urllib.request.urlopen(request, timeout=SEND_TIMEOUT) as resp:
             return 200 <= resp.status < 300
     except urllib.error.HTTPError as exc:
-        # 4xx (token salah, payload tak dikenali) tak boleh diulang: buang, jangan spool
         log(f'server reject {exc.code} src={src} event={event}')
-        return True
+        # 5xx dan 429 sementara (cth. database locked): spool dan cuba lagi.
+        # Lain-lain 4xx (token salah, payload tak dikenali) tak boleh diulang: buang.
+        return not (exc.code >= 500 or exc.code == 429)
     except Exception as exc:
         log(f'send gagal src={src}: {exc.__class__.__name__}')
         return False

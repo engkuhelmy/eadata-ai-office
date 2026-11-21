@@ -93,6 +93,19 @@ def hook_command(python, hook_path, src, event=None):
     return f'{command} --event {event}' if event else command
 
 
+def cmd_safe_command(python, hook_path, src, event=None):
+    """Untuk host yang jalankan command melalui `cmd /c` (Antigravity di Windows).
+    cmd /c rosak bila command bermula dengan petikan dan ada lebih dua petikan
+    ('"python.exe"' is not recognized). Tanpa ruang: tiada petikan langsung. Ada ruang:
+    bungkus keseluruhan dalam sepasang petikan luar (peraturan cmd /c)."""
+    plain = f'{python} {hook_path} --src {src}' + (f' --event {event}' if event else '')
+    if not any(ch.isspace() for ch in f'{python}{hook_path}'):
+        return plain
+
+    quoted = hook_command(python, hook_path, src, event)
+    return f'"{quoted}"' if sys.platform == 'win32' else quoted
+
+
 def merge_antigravity(data, python, hook_path, uninstall):
     """hooks.json Antigravity: kunci peringkat atas = nama hook. Entry kita: HUB_KEY."""
     data.pop(HUB_KEY, None)
@@ -101,7 +114,7 @@ def merge_antigravity(data, python, hook_path, uninstall):
 
     entry = {'enabled': True}
     for event, is_tool_event in ANTIGRAVITY_EVENTS.items():
-        handler = {'type': 'command', 'command': hook_command(python, hook_path, 'antigravity', event), 'timeout': 5}
+        handler = {'type': 'command', 'command': cmd_safe_command(python, hook_path, 'antigravity', event), 'timeout': 5}
         entry[event] = [{'hooks': [handler]}] if is_tool_event else [handler]
     data[HUB_KEY] = entry
 

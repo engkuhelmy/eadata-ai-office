@@ -118,6 +118,15 @@ class SendTests(HookTestCase):
         self.write_config('http://127.0.0.1:9')  # port tertutup
         self.assertFalse(hook.post(hook.load_config(), 'claude', None, {'a': 1}))
 
+    def test_server_5xx_and_429_are_retried_via_spool(self):
+        for status in (500, 503, 429):
+            stub = StubServer(status=status)
+            try:
+                self.write_config(stub.url)
+                self.assertFalse(hook.post(hook.load_config(), 'claude', None, {'a': 1}), status)
+            finally:
+                stub.close()
+
     def test_server_4xx_is_not_retried(self):
         stub = StubServer(status=401)
         try:
@@ -307,6 +316,18 @@ class AntigravityInstallerTests(unittest.TestCase):
         # Event tool dibungkus dalam kumpulan, event lain senarai handler terus
         self.assertIn('hooks', entry['PostToolUse'][0])
         self.assertIn('--event PostToolUse', entry['PostToolUse'][0]['hooks'][0]['command'])
+
+    def test_command_has_no_quotes_when_paths_have_no_spaces(self):
+        # cmd /c rosak dengan "python.exe" "hook.py": mesti tanpa petikan bila boleh
+        cmd = installer.cmd_safe_command('C:\\Py\\python.exe', 'C:\\Users\\Helmi\\.office-hub\\office-hook.py', 'antigravity', 'Stop')
+        self.assertEqual(cmd, 'C:\\Py\\python.exe C:\\Users\\Helmi\\.office-hub\\office-hook.py --src antigravity --event Stop')
+        self.assertNotIn('"', cmd)
+
+    def test_command_with_spaces_is_wrapped_for_cmd(self):
+        cmd = installer.cmd_safe_command('C:\\Program Files\\Py\\python.exe', 'C:\\Users\\Ali Baba\\office-hook.py', 'antigravity', 'Stop')
+        self.assertIn('"C:\\Program Files\\Py\\python.exe"', cmd)
+        if sys.platform == 'win32':
+            self.assertTrue(cmd.startswith('""') and cmd.endswith('"'))
 
     def test_install_is_idempotent_and_uninstall_keeps_other_hooks(self):
         self.path.write_text(json.dumps({'my-linter': {'enabled': True}}), encoding='utf-8')

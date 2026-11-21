@@ -83,4 +83,12 @@ class AntigravityAdapterTest extends TestCase
         $this->assertNull($this->normalize(['toolCall' => ['name' => 'run_command']], 'PostToolUse'));
         $this->assertNull($this->normalize(['conversationId' => 'conv-1'], null));
     }
+
+    public function test_event_name_falls_back_to_hookEventName_in_payload(): void
+    {
+        $e = $this->normalize(['conversationId' => 'conv-1', 'hookEventName' => 'SessionStart', 'cwd' => 'C:\\proj\\eadata-web'], null);
+
+        $this->assertSame('session_start', $e->event);
+        $this->assertSame('eadata-web', $e->project);
+    }
 }

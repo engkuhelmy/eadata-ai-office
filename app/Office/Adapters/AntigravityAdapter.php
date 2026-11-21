@@ -30,7 +30,10 @@ class AntigravityAdapter extends BaseAdapter
             return null;
         }
 
-        $event = match ($eventHint) {
+        // Payload sebenar (agy 1.5.5) rupanya ada hookEventName dan cwd walaupun docs tak sebut.
+        $hook = $eventHint ?? $this->str($payload, 'hookEventName');
+
+        $event = match ($hook) {
             'SessionStart' => 'session_start',
             'PreInvocation' => $this->isNewPrompt($sid, $payload) ? 'prompt' : null,
             'PostToolUse' => $this->str($payload, 'error') !== null ? 'tool_error' : 'tool_end',
@@ -57,7 +60,7 @@ class AntigravityAdapter extends BaseAdapter
             name: 'Antigravity '.substr($sid, 0, 4),
             label: 'Antigravity',
             pc: $this->pc($payload),
-            project: $this->projectFromCwd($workspace),
+            project: $this->projectFromCwd($workspace ?? $payload['cwd'] ?? null),
             event: $event,
             tool: $tool,
             target: $this->redactor->target($command ?? $path),
