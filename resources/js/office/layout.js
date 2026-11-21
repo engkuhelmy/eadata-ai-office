@@ -38,6 +38,8 @@ export const DEPARTMENTS = {
         label: 'Client Meeting',
         spot: { c: 10, r: 6 },
         seats: [{ c: 9, r: 5 }, { c: 10, r: 5 }, { c: 11, r: 5 }],
+        // Lebih 3 orang: yang lain berdiri di sekeliling meja (mesyuarat ramai-ramai)
+        stands: [{ c: 10, r: 6 }, { c: 9, r: 6 }, { c: 11, r: 6 }, { c: 8, r: 5 }, { c: 12, r: 5, flip: true }, { c: 8, r: 6 }, { c: 12, r: 6, flip: true }],
         cells: [
             { c: 9, r: 3, kind: 'table' }, { c: 10, r: 3, kind: 'table' }, { c: 11, r: 3, kind: 'table' },
             { c: 9, r: 4, kind: 'table' }, { c: 10, r: 4, kind: 'table' }, { c: 11, r: 4, kind: 'table' },

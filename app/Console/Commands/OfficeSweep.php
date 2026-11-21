@@ -30,7 +30,10 @@ class OfficeSweep extends Command
         Agent::query()->whereNull('ended_at')->each(function (Agent $agent) use ($now, $chillAfter, $idleAfter, $endAfter, &$changed) {
             $last = $agent->last_event_at ?? $agent->updated_at;
 
-            if ($last < $endAfter) {
+            // Sesi demo (office:demo) tak pernah ditamatkan oleh sweep, walaupun proses demo terhenti.
+            $isDemo = str_starts_with((string) $agent->session_id, 'demo-');
+
+            if ($last < $endAfter && ! $isDemo) {
                 $agent->fill(['status' => Agent::STATUS_ENDED, 'ended_at' => $now, 'current_task' => null]);
             } else {
                 // needs_approval sengaja dibiar: agent tu memang tunggu manusia

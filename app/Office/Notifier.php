@@ -27,6 +27,11 @@ class Notifier
                 return;
             }
 
+            // Staff demo (office:demo) sengaja hantar approval/error: jangan spam Telegram.
+            if (str_starts_with((string) $agent->session_id, 'demo-')) {
+                return;
+            }
+
             $token = config('services.telegram.token');
             $chatId = config('services.telegram.chat_id');
             if (! $token || ! $chatId) {

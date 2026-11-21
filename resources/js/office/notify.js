@@ -85,6 +85,8 @@ export function checkTransitions(agents, loaded) {
 
     let alerted = false;
     for (const a of agents) {
+        // Staff demo (pc DEMO-PC) sengaja minta approval/error: loceng dalam office sahaja, tiada banner atau bunyi
+        if (a.pc === 'DEMO-PC') continue;
         if (ALERT_MSG[a.status] && prev.get(a.id) !== a.status) {
             showBanner(a, a.status);
             alerted = true;
