@@ -95,7 +95,7 @@ class ProcessAgentEvent implements ShouldQueue
         return match (true) {
             in_array($e->tool, ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'], true) => $file ? "Editing {$file}" : 'Editing',
             $e->tool === 'Read' => $file ? "Reading {$file}" : 'Reading',
-            $e->tool === 'Bash' => 'Running '.Str::limit((string) $e->target, 40),
+            in_array($e->tool, ['Bash', 'PowerShell'], true) => 'Running '.Str::limit((string) $e->target, 40),
             $e->tool !== null => (string) $e->tool,
             default => null,
         };

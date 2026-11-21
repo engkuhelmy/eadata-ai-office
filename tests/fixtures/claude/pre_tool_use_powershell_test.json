@@ -1,0 +1,12 @@
+{
+  "_source": "Bentuk tool PowerShell dilihat dalam sesi Claude Code sebenar di Windows (21 Nov 2026).",
+  "session_id": "3f9a1c2e-claude-session-01",
+  "cwd": "C:\\Users\\Helmi\\Desktop\\ai office virtual 3D",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "PowerShell",
+  "tool_input": {
+    "command": "php artisan test"
+  },
+  "pc": "HELMY-PC",
+  "ts": "2026-11-21T20:40:00+08:00"
+}

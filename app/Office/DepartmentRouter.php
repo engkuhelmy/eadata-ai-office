@@ -16,7 +16,7 @@ class DepartmentRouter
     private const EDIT_TOOLS = ['edit', 'write', 'multiedit', 'notebookedit', 'patch', 'write_file'];
     private const READ_TOOLS = ['read', 'grep', 'glob', 'websearch', 'webfetch', 'web_search', 'web_fetch', 'browser'];
     private const MEETING_TOOLS = ['task', 'agent', 'delegate_task'];
-    private const SHELL_TOOLS = ['bash', 'terminal', 'shell', 'run_command'];
+    private const SHELL_TOOLS = ['bash', 'powershell', 'terminal', 'shell', 'run_command'];
     private const TEST_CMD = '/\b(phpunit|pest|jest|vitest|pytest)\b|\bartisan\s+test\b/i';
     private const DEPLOY_CMD = '/\b(git\s+push|docker|ssh|pm2|deploy|rsync|kubectl)\b/i';
 
