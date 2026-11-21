@@ -22,7 +22,8 @@ from pathlib import Path
 MARK = 'office-hook'
 HUB_BEGIN = '# office-hub:begin'
 HUB_END = '# office-hub:end'
-ALL_TOOLS = ['claude', 'codex', 'hermes']
+ALL_TOOLS = ['claude', 'codex', 'hermes', 'antigravity']
+HUB_KEY = 'office-hub'  # nama entry hook dalam hooks.json Antigravity
 
 CLAUDE_EVENTS = [
     'SessionStart', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Notification',
@@ -36,6 +37,10 @@ HERMES_EVENTS = [
     'on_session_start', 'pre_llm_call', 'pre_tool_call', 'post_tool_call',
     'subagent_start', 'subagent_stop', 'on_session_end',
 ]
+# Antigravity: stdin tiada nama event, jadi setiap handler bawa --event. PreToolUse sengaja
+# TIDAK dipasang: ia wajib pulangkan 'decision' dan boleh mengganggu kelulusan tool.
+# True = event tool (bentuk [{matcher?, hooks:[...]}]), False = senarai handler terus.
+ANTIGRAVITY_EVENTS = {'SessionStart': False, 'PreInvocation': False, 'PostToolUse': True, 'Stop': False}
 
 
 class Plan:
@@ -83,8 +88,24 @@ def dump_json(data):
     return json.dumps(data, indent=2, ensure_ascii=False) + '\n'
 
 
-def hook_command(python, hook_path, src):
-    return f'"{python}" "{hook_path}" --src {src}'
+def hook_command(python, hook_path, src, event=None):
+    command = f'"{python}" "{hook_path}" --src {src}'
+    return f'{command} --event {event}' if event else command
+
+
+def merge_antigravity(data, python, hook_path, uninstall):
+    """hooks.json Antigravity: kunci peringkat atas = nama hook. Entry kita: HUB_KEY."""
+    data.pop(HUB_KEY, None)
+    if uninstall:
+        return data
+
+    entry = {'enabled': True}
+    for event, is_tool_event in ANTIGRAVITY_EVENTS.items():
+        handler = {'type': 'command', 'command': hook_command(python, hook_path, 'antigravity', event), 'timeout': 5}
+        entry[event] = [{'hooks': [handler]}] if is_tool_event else [handler]
+    data[HUB_KEY] = entry
+
+    return data
 
 
 def merge_claude(data, command, uninstall):
@@ -182,6 +203,16 @@ def install_tool(tool, plan, args, home, python, hook_path, uninstall):
         plan.write(path, dump_json(new))
         if not uninstall:
             print('  Codex: buka `codex`, jalankan `/hooks`, dan trust hook office-hub.')
+
+    elif tool == 'antigravity':
+        path = home / '.gemini' / 'config' / 'hooks.json'
+        if not path.parent.exists() and not uninstall:
+            print(f'  skip antigravity: {path.parent} tak wujud (Antigravity belum dipasang)')
+            return
+        new = merge_antigravity(load_json(path), python, hook_path, uninstall)
+        plan.write(path, dump_json(new))
+        if not uninstall:
+            print('  Antigravity: mula sesi baru, jalankan `/hooks` dalam CLI untuk sahkan hook office-hub aktif.')
 
     elif tool == 'hermes':
         path = home / '.hermes' / 'config.yaml'

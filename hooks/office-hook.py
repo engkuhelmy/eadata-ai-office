@@ -7,6 +7,7 @@
 - Log ke ~/.office-hub/hook.log (rotate 1MB), bukan stdout/stderr.
 """
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -34,6 +35,13 @@ MAX_TARGET_CHARS = 200
 DROP_KEYS = {
     'content', 'new_string', 'old_string', 'patch', 'file_text', 'body',
     'prompt', 'transcript_path', 'last-assistant-message', 'input-messages',
+    # Antigravity (camelCase)
+    'transcriptPath', 'lastUserInput', 'artifactDirectoryPath',
+}
+# Argumen toolCall Antigravity yang dibenarkan (huruf kecil). Selebihnya (isi fail, replacement) dibuang.
+TOOL_ARG_KEYS = {
+    'commandline', 'command', 'cwd', 'targetfile', 'absolutepath', 'path', 'filepath', 'file_path',
+    'directorypath', 'searchpath', 'url', 'query', 'pattern',
 }
 # Field tool_input yang dibenarkan
 TOOL_INPUT_KEYS = {'file_path', 'path', 'command', 'pattern', 'query', 'url', 'subagent_type', 'description'}
@@ -102,6 +110,23 @@ def sanitize(payload):
                 if key in tool_response:
                     status[key] = tool_response[key]
         body['tool_response'] = status
+
+    # Antigravity: toolCall.args ditapis, input pengguna jadi hash sahaja, error jadi penanda
+    tool_call = payload.get('toolCall')
+    if isinstance(tool_call, dict):
+        args = tool_call.get('args')
+        body['toolCall'] = {
+            'name': str(tool_call.get('name', '')),
+            'args': {
+                k: redact_text(str(v))
+                for k, v in (args.items() if isinstance(args, dict) else [])
+                if str(k).lower() in TOOL_ARG_KEYS
+            },
+        }
+    if 'lastUserInput' in payload:
+        body['promptHash'] = hashlib.sha1(str(payload['lastUserInput']).encode('utf-8', 'replace')).hexdigest()[:12]
+    if 'error' in payload:
+        body['error'] = 'error' if payload.get('error') else ''
 
     body['pc'] = socket.gethostname()
     body['ts'] = datetime.datetime.now().astimezone().isoformat(timespec='seconds')
@@ -260,6 +285,15 @@ def main(argv):
     body = sanitize(payload if isinstance(payload, dict) else {})
     data = {'src': src, 'event': event, 'body': body}
 
+    # Tangkap payload (sudah ditapis) untuk dijadikan fixture: OFFICE_HOOK_CAPTURE=1
+    if os.environ.get('OFFICE_HOOK_CAPTURE'):
+        try:
+            HOME_DIR.mkdir(parents=True, exist_ok=True)
+            with (HOME_DIR / 'captured.jsonl').open('a', encoding='utf-8') as fh:
+                fh.write(json.dumps(data, ensure_ascii=False) + '\n')
+        except Exception:
+            pass
+
     try:
         spawn_background(data)
     except Exception as exc:
@@ -268,9 +302,22 @@ def main(argv):
         spool_append(src, event, body)
 
 
+def stdout_reply(src):
+    """Hanya Antigravity mahu JSON pada stdout ({} = tiada keputusan). Vendor lain: kosong
+    (Hermes baca stdout sebagai arahan, jadi MESTI kosong)."""
+    return '{}' if src == 'antigravity' else ''
+
+
 if __name__ == '__main__':
     try:
         main(sys.argv[1:])
     except Exception as exc:
         log(f'hook error: {exc.__class__.__name__}: {exc}')
+    try:
+        reply = stdout_reply(parse_args(sys.argv[1:])[0])
+        if reply:
+            sys.stdout.write(reply)
+            sys.stdout.flush()
+    except Exception:
+        pass
     sys.exit(0)

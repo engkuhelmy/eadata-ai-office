@@ -100,6 +100,7 @@ export const VENDOR_COLORS = {
     claude: 0xd97757,
     codex: 0x10a37f,
     hermes: 0x8b5cf6,
+    antigravity: 0x4285f4,
     generic: 0x64748b,
 };
 

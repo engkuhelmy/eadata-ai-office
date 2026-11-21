@@ -169,6 +169,33 @@ class SendTests(HookTestCase):
         self.assertEqual(captured['body']['tool_input'], {'file_path': 'a.php'})
 
 
+class AntigravityHookTests(HookTestCase):
+    def test_tool_args_are_whitelisted_and_prompt_is_hashed(self):
+        body = hook.sanitize({
+            'conversationId': 'c1',
+            'workspacePaths': ['C:\\proj'],
+            'lastUserInput': 'tolong buat rahsia',
+            'transcriptPath': 'C:\\x\\t.json',
+            'toolCall': {'name': 'write_to_file', 'args': {
+                'TargetFile': 'app/a.php', 'CodeContent': 'ISI-RAHSIA', 'CommandLine': 'echo Bearer abc123',
+            }},
+            'error': 'panjang output error yang mungkin ada rahsia',
+        })
+
+        self.assertEqual(set(body['toolCall']['args']), {'TargetFile', 'CommandLine'})
+        self.assertNotIn('rahsia', json.dumps(body).lower())
+        self.assertNotIn('abc123', json.dumps(body))
+        self.assertNotIn('lastUserInput', body)
+        self.assertEqual(len(body['promptHash']), 12)
+        self.assertEqual(body['error'], 'error')
+        self.assertEqual(body['workspacePaths'], ['C:\\proj'])
+
+    def test_only_antigravity_prints_json_reply(self):
+        self.assertEqual(hook.stdout_reply('antigravity'), '{}')
+        for src in ('claude', 'codex', 'hermes', 'generic', None):
+            self.assertEqual(hook.stdout_reply(src), '')
+
+
 class InstallerTests(unittest.TestCase):
     def setUp(self):
         self.home = Path(tempfile.mkdtemp())
@@ -248,6 +275,59 @@ class InstallerTests(unittest.TestCase):
         handler = codex['hooks']['SessionEnd'][0]['hooks'][0]
         self.assertNotIn('async', handler)
         self.assertLessEqual(handler['timeout'], 3)
+
+
+class AntigravityInstallerTests(unittest.TestCase):
+    def setUp(self):
+        self.home = Path(tempfile.mkdtemp())
+        (self.home / '.gemini' / 'config').mkdir(parents=True)
+        self.path = self.home / '.gemini' / 'config' / 'hooks.json'
+
+    def run_installer(self, *extra):
+        args = ['--home', str(self.home), '--tools', 'antigravity', *extra]
+        if '--uninstall' not in extra:
+            args += ['--url', 'http://127.0.0.1:8000', '--token', 'eod_test']
+        with redirect_stdout(io.StringIO()):
+            installer.main(args)
+
+    def test_install_adds_event_handlers_without_pre_tool_use(self):
+        self.path.write_text(json.dumps({'my-linter': {'enabled': True}}), encoding='utf-8')
+        self.run_installer()
+
+        data = json.loads(self.path.read_text(encoding='utf-8'))
+        self.assertIn('my-linter', data)
+        entry = data['office-hub']
+        self.assertTrue(entry['enabled'])
+        self.assertEqual(set(entry) - {'enabled'}, {'SessionStart', 'PreInvocation', 'PostToolUse', 'Stop'})
+        self.assertNotIn('PreToolUse', entry)
+
+        handler = entry['SessionStart'][0]
+        self.assertIn('--src antigravity --event SessionStart', handler['command'])
+        self.assertEqual(handler['type'], 'command')
+        # Event tool dibungkus dalam kumpulan, event lain senarai handler terus
+        self.assertIn('hooks', entry['PostToolUse'][0])
+        self.assertIn('--event PostToolUse', entry['PostToolUse'][0]['hooks'][0]['command'])
+
+    def test_install_is_idempotent_and_uninstall_keeps_other_hooks(self):
+        self.path.write_text(json.dumps({'my-linter': {'enabled': True}}), encoding='utf-8')
+        self.run_installer()
+        first = self.path.read_text(encoding='utf-8')
+        self.run_installer()
+        self.assertEqual(first, self.path.read_text(encoding='utf-8'))
+
+        self.run_installer('--uninstall')
+        self.assertEqual(json.loads(self.path.read_text(encoding='utf-8')), {'my-linter': {'enabled': True}})
+
+    def test_dry_run_writes_nothing(self):
+        self.run_installer('--dry-run')
+        self.assertFalse(self.path.exists())
+        self.assertFalse((self.home / '.office-hub').exists())
+
+    def test_skipped_when_antigravity_not_installed(self):
+        empty = Path(tempfile.mkdtemp())
+        with redirect_stdout(io.StringIO()):
+            installer.main(['--home', str(empty), '--tools', 'antigravity', '--url', 'http://x', '--token', 'eod_t'])
+        self.assertFalse((empty / '.gemini').exists())
 
 
 if __name__ == '__main__':

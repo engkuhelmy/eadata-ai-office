@@ -3,6 +3,7 @@
 namespace App\Office;
 
 use App\Office\Adapters\AdapterInterface;
+use App\Office\Adapters\AntigravityAdapter;
 use App\Office\Adapters\ClaudeCodeAdapter;
 use App\Office\Adapters\CodexAdapter;
 use App\Office\Adapters\GenericAdapter;
@@ -18,12 +19,14 @@ class AdapterRegistry
         ClaudeCodeAdapter $claude,
         CodexAdapter $codex,
         HermesAdapter $hermes,
+        AntigravityAdapter $antigravity,
         GenericAdapter $generic,
     ) {
         $this->adapters = [
             $claude->vendor() => $claude,
             $codex->vendor() => $codex,
             $hermes->vendor() => $hermes,
+            $antigravity->vendor() => $antigravity,
             $generic->vendor() => $generic,
         ];
     }
