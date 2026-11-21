@@ -33,7 +33,7 @@
         .muted { color: var(--muted); }
         .small { font-size: 12px; }
         main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; padding: 12px; }
-        #office-canvas { background: #2a2219; border-radius: 8px; overflow: hidden; aspect-ratio: 1280 / 720; width: 100%; }
+        #office-canvas { background: #2a2219; border-radius: 8px; overflow: hidden; aspect-ratio: 1440 / 860; width: 100%; }
         aside { display: grid; gap: 12px; align-content: start; }
         section { background: var(--panel); border-radius: 8px; padding: 10px 12px; }
         section h2 { font-size: 14px; margin: 0 0 8px; color: var(--accent); }
@@ -109,7 +109,7 @@
         html.tv .brand h1 { font-size: 14px; }
         html.tv .brand .by { font-size: 10px; margin-top: 0; }
         html.tv main { position: fixed; inset: 0; padding: 0; display: grid; place-items: center; gap: 0; }
-        html.tv #office-canvas { width: min(100vw, calc(100vh * 1280 / 720)); height: auto; border-radius: 0; }
+        html.tv #office-canvas { width: min(100vw, calc(100vh * 1440 / 860)); height: auto; border-radius: 0; }
         html.tv.tv-idle, html.tv.tv-idle * { cursor: none !important; }
         @media (max-width: 860px) {
             main { grid-template-columns: 1fr; padding: 8px; }

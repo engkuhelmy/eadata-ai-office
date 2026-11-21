@@ -68,10 +68,16 @@ class OfficeController extends Controller
         $data = $request->validate([
             'name' => ['nullable', 'string', 'max:100'],
             'department' => ['nullable', 'string', Rule::in(DepartmentRouter::DEPARTMENTS)],
+            'avatar' => ['nullable', 'string', Rule::in(Agent::AVATARS)],
         ]);
 
         $name = trim((string) ($data['name'] ?? ''));
         $agent->custom_name = $name !== '' ? $name : null;
+        // Avatar hanya diubah kalau dihantar; kosong/null = kembali ke 'default'.
+        if ($request->has('avatar')) {
+            $avatar = $data['avatar'] ?? null;
+            $agent->avatar = ($avatar === null || $avatar === 'default') ? null : $avatar;
+        }
         $agent->pinned_department = $data['department'] ?? null;
         $agent->save();
 

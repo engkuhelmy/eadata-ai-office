@@ -18,6 +18,7 @@ class OfficePresenter
             'name' => $agent->displayName(),
             'auto_name' => $agent->name,
             'custom_name' => $agent->custom_name,
+            'avatar' => $agent->avatar ?? 'default',
             'pc' => $agent->pc,
             'project' => $agent->project,
             'department' => $agent->effectiveDepartment(),

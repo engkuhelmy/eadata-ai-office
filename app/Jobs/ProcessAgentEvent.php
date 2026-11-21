@@ -52,7 +52,8 @@ class ProcessAgentEvent implements ShouldQueue
         if (in_array($e->event, ['tool_start', 'tool_end'], true)) {
             $attributes['current_task'] = $this->taskFor($e);
         }
-        if ($e->event === 'session_end') {
+        // Rehat/chill: buang bubble tugas lama supaya tak tinggal "Editing X" yang basi.
+        if (in_array($e->event, ['session_end', 'idle', 'turn_done'], true)) {
             $attributes['current_task'] = null;
         }
 

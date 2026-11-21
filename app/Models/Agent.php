@@ -14,8 +14,11 @@ class Agent extends Model
     public const STATUS_ERROR = 'error';
     public const STATUS_ENDED = 'ended';
 
+    /** Gaya avatar yang dibenarkan (default = rupa asal). */
+    public const AVATARS = ['default', 'woman', 'hiphop', 'genz'];
+
     protected $fillable = [
-        'vendor', 'session_id', 'label', 'name', 'custom_name', 'pc', 'project',
+        'vendor', 'session_id', 'label', 'name', 'custom_name', 'avatar', 'pc', 'project',
         'department', 'pinned_department', 'status', 'current_task', 'last_event_at', 'ended_at',
         'tokens_in', 'tokens_out', 'tokens_cache_read', 'tokens_cache_create',
     ];

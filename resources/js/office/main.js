@@ -1,6 +1,7 @@
 import '../bootstrap';
 import Phaser from 'phaser';
 import OfficeScene from './OfficeScene';
+import { CANVAS } from './layout';
 import * as store from './state';
 import * as ui from './ui';
 import { connectRealtime } from './realtime';
@@ -19,8 +20,8 @@ scene.onSelect = (id) => ui.showDetail(id);
 window.__officeGame = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'office-canvas',
-    width: 1280,
-    height: 720,
+    width: CANVAS.w,
+    height: CANVAS.h,
     backgroundColor: '#2a2219',
     scale: {
         mode: Phaser.Scale.FIT,

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Agent;
 use App\Models\User;
+use App\Office\DepartmentRouter;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -82,5 +83,77 @@ class AgentOverrideTest extends TestCase
         $this->actingAs($this->user('owner'))
             ->patchJson("/office/agents/{$agent->id}", ['department' => 'rooftop'])
             ->assertStatus(422);
+    }
+
+    public function test_owner_can_set_avatar_and_state_exposes_it(): void
+    {
+        $agent = $this->agent();
+        $this->actingAs($this->user('owner'));
+
+        $this->getJson('/office/state')->assertJsonPath('agents.0.avatar', 'default');
+
+        foreach (['woman', 'hiphop', 'genz'] as $avatar) {
+            $this->patchJson("/office/agents/{$agent->id}", ['avatar' => $avatar])
+                ->assertOk()
+                ->assertJsonPath('agent.avatar', $avatar);
+        }
+
+        $this->getJson('/office/state')->assertJsonPath('agents.0.avatar', 'genz');
+    }
+
+    public function test_empty_avatar_returns_to_default_and_missing_avatar_is_kept(): void
+    {
+        $agent = $this->agent();
+        $agent->update(['avatar' => 'woman']);
+
+        $this->actingAs($this->user('owner'))
+            ->patchJson("/office/agents/{$agent->id}", ['name' => 'Aiman'])
+            ->assertOk()
+            ->assertJsonPath('agent.avatar', 'woman');
+
+        $this->patchJson("/office/agents/{$agent->id}", ['avatar' => null])
+            ->assertOk()
+            ->assertJsonPath('agent.avatar', 'default');
+
+        $this->assertNull($agent->fresh()->avatar);
+    }
+
+    public function test_unknown_avatar_is_rejected(): void
+    {
+        $agent = $this->agent();
+
+        $this->actingAs($this->user('owner'))
+            ->patchJson("/office/agents/{$agent->id}", ['avatar' => 'robot'])
+            ->assertStatus(422);
+
+        $this->assertNull($agent->fresh()->avatar);
+    }
+
+    public function test_viewer_cannot_change_avatar(): void
+    {
+        $agent = $this->agent();
+
+        $this->actingAs($this->user('viewer'))
+            ->patchJson("/office/agents/{$agent->id}", ['avatar' => 'woman'])
+            ->assertForbidden();
+
+        $this->assertNull($agent->fresh()->avatar);
+    }
+
+    public function test_new_room_departments_can_be_pinned_and_routed(): void
+    {
+        $agent = $this->agent();
+
+        $this->actingAs($this->user('owner'));
+
+        foreach (['boardroom', 'pantry', 'toilet', 'playroom'] as $department) {
+            $this->assertContains($department, DepartmentRouter::DEPARTMENTS);
+
+            $this->patchJson("/office/agents/{$agent->id}", ['department' => $department])
+                ->assertOk()
+                ->assertJsonPath('agent.department', $department);
+
+            $this->assertSame($department, (new DepartmentRouter)->route('idle', explicit: $department));
+        }
     }
 }

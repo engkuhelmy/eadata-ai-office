@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { GRID, TILE, ORIGIN, CANVAS, DEPARTMENTS, DECOR, VENDOR_COLORS, allSeats, blockedTiles, seatsFor, spotFor, standsFor } from './layout';
+import { AVATARS, GRID, TILE, ORIGIN, CANVAS, DEPARTMENTS, DEPT_BUBBLE, DECOR, VENDOR_COLORS, allSeats, blockedTiles, seatsFor, spotFor, standsFor } from './layout';
 import { findPath } from './pathfinding';
 
 const WALK_SPEED = 110; // px per saat
@@ -9,6 +9,17 @@ const WALL_H = 130;
 const SEAT_SHIFT = { x: 11, y: -6 };
 const BLOCKED = blockedTiles();
 const GOOGLE_COLORS = ['blue', 'red', 'yellow', 'green'];
+
+// Tekstur sprite staff ikut gaya watak: 'default' guna nama lama staff_{layer}
+const texKey = (style, layer) => `staff_${style}_${layer}`;
+const texFile = (style, layer) => (style === 'default' ? `staff_${layer}` : `staff_${style}_${layer}`);
+const STYLE_HAIR = {
+    default: [0x2a2219, 0x6d4c2a, 0x1f2937, 0xa16207, 0x3f3f46, 0x92400e],
+    woman: [0x2a2219, 0x4a2c1a, 0x6d4c2a, 0x1f2937, 0x7c2d12],
+    hiphop: [0x1a1a1a, 0x2a2219, 0x3f3f46],
+    genz: [0xff6fae, 0x6ee7b7, 0xa78bfa, 0x60a5fa, 0xfbbf24],
+};
+const styleOf = (agent) => (AVATARS.includes(agent.avatar) ? agent.avatar : 'default');
 const GOOGLE_HEX = [0x4285f4, 0xea4335, 0xfbbc05, 0x34a853];
 
 const C = {
@@ -189,17 +200,21 @@ export default class OfficeScene extends Phaser.Scene {
 
     preload() {
         // Lebih 32 fail: batch kedua loader Phaser tersekat dalam pane tersembunyi, jadi muat semua sekali gus.
-        this.load.maxParallelDownloads = 64;
+        this.load.maxParallelDownloads = 96;
 
-        // Sprite sheet staff: 4 lapisan (fixed, skin, hair, shirt), 8 frame 32x48
-        for (const layer of ['fixed', 'skin', 'hair', 'shirt']) {
-            this.load.spritesheet(`staff_${layer}`, `/assets/office/staff_${layer}.png`, { frameWidth: 32, frameHeight: 48 });
+        // Sprite sheet staff: 4 gaya x 4 lapisan (fixed, skin, hair, shirt), 16 frame 32x48.
+        // Frame: 0-1 idle, 2-5 jalan, 6-7 duduk depan, 8-9 duduk belakang, 10-11 main, 12-13 dart, 14-15 minum.
+        for (const style of AVATARS) {
+            for (const layer of ['fixed', 'skin', 'hair', 'shirt']) {
+                this.load.spritesheet(texKey(style, layer), `/assets/office/${texFile(style, layer)}.png`, { frameWidth: 32, frameHeight: 48 });
+            }
         }
         for (const name of ['wall_window_a', 'wall_window_b', 'wall_board_a', 'wall_cork_b', 'wall_poster_a1', 'wall_poster_a2', 'wall_poster_b', 'wall_logo_b',
-            'partition_a', 'partition_b', 'partition_a_logo', 'partition_b_logo']) {
+            'wall_dartboard_b', 'partition_a', 'partition_b', 'partition_a_logo', 'partition_b_logo']) {
             this.load.image(name, `/assets/office/${name}.png`);
         }
         for (const name of ['floor_a', 'floor_b', 'desk', 'plant', 'shelf', 'cooler', 'machine', 'server', 'pong', 'foos', 'table', 'reception', 'bell',
+            'snooker', 'fridge', 'wc', 'sink', 'boardtable',
             ...GOOGLE_COLORS.map((c) => `chair_${c}`), ...GOOGLE_COLORS.map((c) => `sofa_${c}`)]) {
             this.load.image(name, `/assets/office/${name}.png`);
         }
@@ -280,8 +295,11 @@ export default class OfficeScene extends Phaser.Scene {
         // Permaidani: meeting (merah) dan break room (biru)
         for (let r = 5; r <= 7; r++) for (let c = 8; c <= 12; c++) tilePoly(g, c, r, C.rugRed, 0.16);
         for (let r = 11; r <= 14; r++) for (let c = 16; c <= 19; c++) tilePoly(g, c, r, C.rugBlue, 0.14);
-        // Bilik bermain: permaidani kuning dan hijau
-        for (let r = 11; r <= 15; r++) for (let c = 10; c <= 14; c++) tilePoly(g, c, r, (c + r) % 2 ? C.rugYellow : C.rugGreen, 0.16);
+        // Board room: permaidani biru. Chill room: kuning dan hijau. Toilet: jubin biru muda. Pantry: kuning lembut.
+        for (let r = 11; r <= 14; r++) for (let c = 9; c <= 14; c++) tilePoly(g, c, r, C.rugBlue, 0.12);
+        for (let r = 16; r <= 19; r++) for (let c = 3; c <= 15; c++) tilePoly(g, c, r, (c + r) % 2 ? C.rugYellow : C.rugGreen, 0.16);
+        for (let r = 15; r <= 19; r++) for (let c = 22; c <= 27; c++) tilePoly(g, c, r, 0x9ad0f5, 0.28);
+        for (let r = 1; r <= 5; r++) for (let c = 23; c <= 27; c++) tilePoly(g, c, r, C.rugYellow, 0.1);
     }
 
     drawWalls() {
@@ -307,7 +325,7 @@ export default class OfficeScene extends Phaser.Scene {
         }
 
         // Hiasan dinding: sprite pixel art yang di-shear ikut dinding
-        const windowsA = [2, 6, 18];
+        const windowsA = [2, 6, 18, 24];
         const windowsB = [2, 10.4];
         for (const u of windowsA) this.wallSprite('wall_window_a', 'A', u, 106);
         for (const u of windowsB) this.wallSprite('wall_window_b', 'B', u, 106);
@@ -317,6 +335,8 @@ export default class OfficeScene extends Phaser.Scene {
         this.wallSprite('wall_poster_a2', 'A', 20.5, 102);
         this.wallSprite('wall_poster_b', 'B', 9, 102);
         this.wallSprite('wall_logo_b', 'B', 13.2, 92); // logo di sebelah reception
+        this.wallSprite('wall_dartboard_b', 'B', 17.2, 86); // papan dart di chill room
+        this.wallSprite('wall_window_b', 'B', 19.4, 106);
 
         // Cahaya tingkap di lantai (additive, lembut)
         const light = this.add.graphics().setDepth(-950).setBlendMode(Phaser.BlendModes.ADD);
@@ -437,19 +457,21 @@ export default class OfficeScene extends Phaser.Scene {
         }
 
         // Bola ping-pong melantun di atas meja bilik bermain (meja 2x2 tile, pusat di (12.5, 12.5))
-        const pong = tileCenter(12.5, 12.5);
-        const ball = this.add.circle(pong.x - 16, pong.y - 12, 2, 0xffffff).setDepth(13 + 13 + 0.7);
+        const pong = tileCenter(10.5, 17.5);
+        const ball = this.add.circle(pong.x - 16, pong.y - 12, 2, 0xffffff).setDepth(11 + 18 + 0.7);
         this.tweens.add({ targets: ball, x: pong.x + 16, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
         this.tweens.add({ targets: ball, y: pong.y - 20, duration: 260, yoyo: true, repeat: -1, ease: 'Sine.easeOut' });
 
         // Asap kopi dan gelembung water cooler
         const machine = tileCenter(20, 2);
+        const pantryMachine = tileCenter(24, 1);
         const cooler = tileCenter(20, 13);
         this.time.addEvent({
             delay: 800,
             loop: true,
             callback: () => {
                 this.puff(machine.x - 3, machine.y - 40, 0xf5f5f4, 26, 1600);
+                this.puff(pantryMachine.x - 3, pantryMachine.y - 40, 0xf5f5f4, 26, 1600);
                 this.puff(cooler.x, cooler.y - 42, 0xbfe9ff, 18, 1000);
             },
         });
@@ -470,7 +492,9 @@ export default class OfficeScene extends Phaser.Scene {
     spawn(agent) {
         const offset = offsetFor(agent.id);
         const shirt = VENDOR_COLORS[agent.vendor] ?? 0x64748b;
-        const hair = HAIR[hashOf(agent.id) % HAIR.length];
+        const style = styleOf(agent);
+        const hairs = STYLE_HAIR[style];
+        const hair = hairs[hashOf(agent.id) % hairs.length];
         const start = spotFor('door');
         const p = tileCenter(start.c, start.r);
 
@@ -479,7 +503,7 @@ export default class OfficeScene extends Phaser.Scene {
         // 4 lapisan sprite: skin, hair, shirt diwarnakan (tint), fixed kekal. Kaki di y=46/48 frame.
         const skinColor = C.skins[hashOf(agent.id) % C.skins.length];
         const layers = ['fixed', 'skin', 'hair', 'shirt'].map((layer) =>
-            this.add.sprite(0, 3, `staff_${layer}`, 0).setOrigin(0.5, 46 / 48)
+            this.add.sprite(0, 3, texKey(style, layer), 0).setOrigin(0.5, 46 / 48)
         );
         layers[1].setTint(skinColor);
         layers[2].setTint(hair);
@@ -524,6 +548,8 @@ export default class OfficeScene extends Phaser.Scene {
             agent,
             container,
             layers,
+            style,
+            act: null,
             facingLeft: false,
             shadow,
             name,
@@ -566,6 +592,7 @@ export default class OfficeScene extends Phaser.Scene {
 
         s.sitting = sits;
         s.standFlip = slot?.flip === true;
+        s.act = sits ? null : slot?.act ?? null; // play | dart | drink
         s.offset = sits ? { ...SEAT_SHIFT } : slot ? { x: 0, y: 0 } : offsetFor(s.id);
         s.path = path ?? [];
         s.dept = dept;
@@ -632,7 +659,17 @@ export default class OfficeScene extends Phaser.Scene {
         s.name.setText(a.name ?? '');
         s.name.setColor(a.status === 'error' ? '#b71c1c' : '#2a2219');
 
-        const text = a.current_task || STATUS_TEXT[a.status] || '';
+        // Gaya watak boleh ditukar oleh owner: tukar tekstur lapisan, kekalkan frame
+        const style = styleOf(a);
+        if (style !== s.style) {
+            s.style = style;
+            ['fixed', 'skin', 'hair', 'shirt'].forEach((layer, i) => s.layers[i].setTexture(texKey(style, layer)));
+            const hairs = STYLE_HAIR[style];
+            s.layers[2].setTint(hairs[hashOf(a.id) % hairs.length]);
+        }
+
+        // Tiada tugas: bubble ikut bilik (Toilet break, Pantry, Chill...) sebelum status
+        const text = a.current_task || DEPT_BUBBLE[s.dept] || STATUS_TEXT[a.status] || '';
         s.bubble.setVisible(text !== '');
         if (text !== s.lastText) {
             s.lastText = text;
@@ -687,9 +724,15 @@ export default class OfficeScene extends Phaser.Scene {
         } else if (s.seated) {
             // Duduk membelakangkan kamera, menaip menghadap meja
             frame = 8 + (Math.floor(time / 140) % 2);
-        } else if (s.playing) {
-            // Bermain ping-pong / foosball: tangan ke depan bergilir (frame 10-11)
+        } else if (s.activity === 'play') {
+            // Snooker / ping-pong / foosball: tangan ke depan bergilir (frame 10-11)
             frame = 10 + (Math.floor(time / 260) % 2);
+        } else if (s.activity === 'dart') {
+            // Lontar dart: tarik (12) lama, lontar (13) sekejap
+            frame = 12 + (Math.floor(time / 450) % 3 === 2 ? 1 : 0);
+        } else if (s.activity === 'drink') {
+            // Minum di pantry (frame 14-15)
+            frame = 14 + (Math.floor(time / 900) % 2);
         } else {
             frame = Math.floor(time / 700) % 2;
         }
@@ -736,7 +779,7 @@ export default class OfficeScene extends Phaser.Scene {
             }
 
             s.seated = !moving && !s.leaving && s.seat !== null && s.sitting === true;
-            s.playing = !moving && !s.leaving && s.seat !== null && s.sitting !== true && s.dept === 'playroom';
+            s.activity = !moving && !s.leaving && s.seat !== null && s.sitting !== true ? s.act : null;
             if (!moving && s.seat !== null && s.sitting !== true) s.facingLeft = s.standFlip === true;
             this.animateFigure(s, time, moving);
 

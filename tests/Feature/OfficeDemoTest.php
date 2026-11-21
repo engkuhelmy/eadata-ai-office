@@ -18,37 +18,73 @@ class OfficeDemoTest extends TestCase
         $this->artisan('office:demo', ['--once' => true, '--speed' => 400, '--hours' => 1])->assertSuccessful();
     }
 
-    public function test_demo_creates_five_staff_from_four_vendors_with_friendly_names(): void
+    public function test_demo_creates_thirteen_staff_from_four_vendors_with_friendly_names(): void
     {
         $this->runDemo();
 
-        $this->assertSame(5, Agent::count());
+        $this->assertSame(13, Agent::count());
         $this->assertEqualsCanonicalizing(
-            ['claude', 'claude', 'codex', 'hermes', 'antigravity'],
+            array_merge(
+                array_fill(0, 5, 'claude'),
+                array_fill(0, 3, 'codex'),
+                array_fill(0, 2, 'hermes'),
+                array_fill(0, 3, 'antigravity'),
+            ),
             Agent::pluck('vendor')->all(),
         );
         $this->assertEqualsCanonicalizing(
-            ['Aiman', 'Balqis', 'Chandra', 'Dewi', 'Evan'],
+            ['Aiman', 'Balqis', 'Chandra', 'Dewi', 'Evan', 'Nurul', 'Sofea', 'Aina', 'Zack', 'Danish', 'Mika', 'Qila', 'Hakim'],
             Agent::pluck('custom_name')->all(),
         );
         $this->assertSame(['DEMO-PC'], Agent::pluck('pc')->unique()->values()->all());
+        $this->assertSame(['eadata-web'], Agent::pluck('project')->unique()->values()->all());
     }
 
-    public function test_everyone_goes_to_the_meeting_room_before_working(): void
+    public function test_demo_staff_get_their_avatars(): void
+    {
+        $this->runDemo();
+
+        $expected = [
+            'Aiman' => 'default', 'Balqis' => 'woman', 'Chandra' => 'default', 'Dewi' => 'woman', 'Evan' => 'hiphop',
+            'Nurul' => 'woman', 'Sofea' => 'woman', 'Aina' => 'woman',
+            'Zack' => 'hiphop', 'Danish' => 'hiphop',
+            'Mika' => 'genz', 'Qila' => 'genz', 'Hakim' => 'genz',
+        ];
+
+        foreach ($expected as $name => $avatar) {
+            $this->assertSame($avatar, Agent::where('custom_name', $name)->value('avatar'), "avatar {$name}");
+        }
+    }
+
+    public function test_everyone_goes_to_the_boardroom_before_working(): void
     {
         $this->runDemo();
 
         foreach (Agent::all() as $agent) {
             $events = $agent->events()->orderBy('id')->get();
-            $firstMeeting = $events->search(fn ($e) => $e->department === 'meeting');
+            $firstBoardroom = $events->search(fn ($e) => $e->department === 'boardroom');
             $firstWork = $events->search(fn ($e) => in_array($e->event, ['tool_start', 'tool_end'], true));
 
-            $this->assertNotFalse($firstMeeting, "{$agent->custom_name} tak masuk mesyuarat");
+            $this->assertNotFalse($firstBoardroom, "{$agent->custom_name} tak masuk boardroom");
             $this->assertNotFalse($firstWork, "{$agent->custom_name} tak kerja");
-            $this->assertLessThan($firstWork, $firstMeeting, "{$agent->custom_name} kerja sebelum mesyuarat");
+            $this->assertLessThan($firstWork, $firstBoardroom, "{$agent->custom_name} kerja sebelum briefing");
+            $this->assertSame('Board briefing', $events[$firstBoardroom]->target);
         }
     }
 
+    public function test_rotators_visit_toilet_pantry_chill_room_and_their_workstations(): void
+    {
+        $this->runDemo();
+
+        $departments = AgentEvent::query()->distinct()->pluck('department')->all();
+
+        foreach (['toilet', 'pantry', 'playroom', 'research', 'deploy', 'ops'] as $department) {
+            $this->assertContains($department, $departments, "tiada event di {$department}");
+        }
+
+        // Rotator rehat dengan event 'idle' (bukan tool) di bilik masing-masing
+        $this->assertGreaterThan(0, AgentEvent::where('event', 'idle')->whereIn('department', ['toilet', 'pantry', 'playroom'])->count());
+    }
     public function test_demo_sessions_are_never_terminated(): void
     {
         $this->runDemo();

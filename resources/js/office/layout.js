@@ -1,12 +1,14 @@
-// Layout pejabat ikut gambar rujukan: grid 22x16, tingkat dua dinding belakang.
+// Layout pejabat: grid 28x20 (sayap kanan untuk pantry dan toilet, sayap bawah untuk chill room).
 // Baris r=0 dan lajur c=0 ialah luar dinding (disekat).
 // cells = furniture yang disekat. kind tentukan rupa (desk, table, sofa, cooler, dll).
 // spot = tile tempat staff berdiri bila sampai ke department.
+// seats = kerusi (duduk, nampak dari belakang). stands = tempat berdiri; act = aktiviti
+//   ('play' snooker/ping-pong/foosball, 'dart' lontar dart, 'drink' minum). flip = menghadap kiri.
 
-export const GRID = { cols: 22, rows: 16 };
+export const GRID = { cols: 28, rows: 20 };
 export const TILE = { w: 56, h: 28 };
-export const ORIGIN = { x: 470, y: 150 };
-export const CANVAS = { w: 1280, h: 720 };
+export const ORIGIN = { x: 600, y: 150 };
+export const CANVAS = { w: 1440, h: 860 };
 
 export const DEPARTMENTS = {
     door: {
@@ -38,7 +40,6 @@ export const DEPARTMENTS = {
         label: 'Client Meeting',
         spot: { c: 10, r: 6 },
         seats: [{ c: 9, r: 5 }, { c: 10, r: 5 }, { c: 11, r: 5 }],
-        // Lebih 3 orang: yang lain berdiri di sekeliling meja (mesyuarat ramai-ramai)
         stands: [{ c: 10, r: 6 }, { c: 9, r: 6 }, { c: 11, r: 6 }, { c: 8, r: 5 }, { c: 12, r: 5, flip: true }, { c: 8, r: 6 }, { c: 12, r: 6, flip: true }],
         cells: [
             { c: 9, r: 3, kind: 'table' }, { c: 10, r: 3, kind: 'table' }, { c: 11, r: 3, kind: 'table' },
@@ -78,37 +79,107 @@ export const DEPARTMENTS = {
             { c: 20, r: 13, kind: 'cooler' },
         ],
     },
-    // Bilik bermain: staff yang "chill" (idle lebih 2 minit) berdiri sekeliling meja ping-pong dan foosball.
-    // stands = tempat berdiri (flip = menghadap kiri). Bukan kerusi, jadi tidak duduk.
-    playroom: {
-        label: 'Game Room',
-        spot: { c: 11, r: 12 },
-        cells: [
-            { c: 12, r: 12, kind: 'pong' }, { c: 13, r: 12, kind: 'pong' },
-            { c: 12, r: 13, kind: 'pong' }, { c: 13, r: 13, kind: 'pong' },
-            { c: 11, r: 15, kind: 'foos' }, { c: 12, r: 15, kind: 'foos' },
-        ],
+
+    // Bilik board meeting: meja panjang untuk mesyuarat dan briefing. 4 duduk, selebihnya berdiri.
+    boardroom: {
+        label: 'Board Room',
+        spot: { c: 11, r: 11 },
+        seats: [{ c: 10, r: 14 }, { c: 11, r: 14 }, { c: 12, r: 14 }, { c: 13, r: 14 }],
         stands: [
-            { c: 11, r: 12 }, { c: 11, r: 13 }, { c: 12, r: 11 }, { c: 13, r: 11 },
-            { c: 14, r: 12, flip: true }, { c: 12, r: 14 }, { c: 13, r: 14, flip: true },
-            { c: 10, r: 14 }, { c: 11, r: 14 }, { c: 10, r: 15 },
+            { c: 11, r: 11 }, { c: 12, r: 11 }, { c: 10, r: 11 }, { c: 13, r: 11 },
+            { c: 9, r: 12 }, { c: 14, r: 12, flip: true }, { c: 9, r: 13 },
+            { c: 9, r: 11 }, { c: 14, r: 11, flip: true },
+        ],
+        cells: [
+            { c: 10, r: 12, kind: 'boardtable' }, { c: 11, r: 12, kind: 'boardtable' },
+            { c: 12, r: 12, kind: 'boardtable' }, { c: 13, r: 12, kind: 'boardtable' },
+            { c: 10, r: 13, kind: 'boardtable' }, { c: 11, r: 13, kind: 'boardtable' },
+            { c: 12, r: 13, kind: 'boardtable' }, { c: 13, r: 13, kind: 'boardtable' },
         ],
     },
+
+    // Chill room: snooker, dart, ping-pong dan foosball. Staff yang chill berdiri main di sini.
+    playroom: {
+        label: 'Chill Room',
+        spot: { c: 9, r: 18 },
+        cells: [
+            { c: 5, r: 17, kind: 'snooker' }, { c: 6, r: 17, kind: 'snooker' }, { c: 7, r: 17, kind: 'snooker' },
+            { c: 5, r: 18, kind: 'snooker' }, { c: 6, r: 18, kind: 'snooker' }, { c: 7, r: 18, kind: 'snooker' },
+            { c: 10, r: 17, kind: 'pong' }, { c: 11, r: 17, kind: 'pong' },
+            { c: 10, r: 18, kind: 'pong' }, { c: 11, r: 18, kind: 'pong' },
+            { c: 13, r: 17, kind: 'foos' }, { c: 14, r: 17, kind: 'foos' },
+        ],
+        stands: [
+            { c: 3, r: 17, flip: true, act: 'dart' }, { c: 5, r: 16, act: 'play' }, { c: 10, r: 16, act: 'play' },
+            { c: 13, r: 16, act: 'play' }, { c: 6, r: 19, act: 'play' }, { c: 10, r: 19, act: 'play' },
+            { c: 3, r: 18, flip: true, act: 'dart' }, { c: 4, r: 17, act: 'play' }, { c: 9, r: 17, act: 'play' },
+            { c: 14, r: 18, flip: true, act: 'play' }, { c: 7, r: 16, act: 'play' }, { c: 12, r: 18, flip: true, act: 'play' },
+            { c: 3, r: 16, flip: true, act: 'dart' }, { c: 8, r: 18, flip: true, act: 'play' }, { c: 11, r: 19, act: 'play' },
+            { c: 5, r: 19, act: 'play' }, { c: 4, r: 18, act: 'play' }, { c: 9, r: 18, act: 'play' },
+            { c: 12, r: 17, flip: true, act: 'play' }, { c: 14, r: 16, act: 'play' }, { c: 7, r: 19, act: 'play' },
+            { c: 6, r: 16, act: 'play' }, { c: 11, r: 16, act: 'play' }, { c: 13, r: 18, act: 'play' },
+            { c: 15, r: 17, flip: true, act: 'play' }, { c: 8, r: 17, flip: true, act: 'play' },
+        ],
+    },
+
+    // Pantry: kaunter dengan mesin kopi, peti sejuk, dan meja makan. Staff ambil minuman.
+    pantry: {
+        label: 'Pantry',
+        spot: { c: 24, r: 3 },
+        cells: [
+            { c: 23, r: 1, kind: 'machine' }, { c: 24, r: 1, kind: 'machine' }, { c: 25, r: 1, kind: 'machine' },
+            { c: 26, r: 1, kind: 'fridge' }, { c: 27, r: 1, kind: 'fridge' },
+            { c: 24, r: 4, kind: 'table' }, { c: 25, r: 4, kind: 'table' },
+        ],
+        stands: [
+            { c: 24, r: 2, act: 'drink' }, { c: 25, r: 2, act: 'drink' }, { c: 23, r: 2, act: 'drink' },
+            { c: 24, r: 5, act: 'drink' }, { c: 25, r: 5, act: 'drink' }, { c: 23, r: 4, act: 'drink' },
+            { c: 26, r: 4, flip: true, act: 'drink' }, { c: 26, r: 2, act: 'drink' }, { c: 23, r: 5, act: 'drink' },
+            { c: 26, r: 5, flip: true, act: 'drink' },
+        ],
+    },
+
+    // Toilet: singki di belakang, kubikel di bawah. Staff berdiri sekejap.
+    toilet: {
+        label: 'Toilet',
+        spot: { c: 24, r: 17 },
+        cells: [
+            { c: 23, r: 15, kind: 'sink' }, { c: 24, r: 15, kind: 'sink' }, { c: 25, r: 15, kind: 'sink' },
+            { c: 23, r: 19, kind: 'wc' }, { c: 25, r: 19, kind: 'wc' }, { c: 27, r: 19, kind: 'wc' },
+        ],
+        stands: [
+            { c: 24, r: 16 }, { c: 23, r: 18 }, { c: 25, r: 18 }, { c: 27, r: 18 }, { c: 23, r: 16 }, { c: 25, r: 16 },
+        ],
+    },
+};
+
+// Teks bubble lalai bila staff tiada tugas (contoh bila di bilik rehat)
+export const DEPT_BUBBLE = {
+    toilet: 'Toilet break',
+    pantry: 'Ambil minuman',
+    playroom: 'Chill',
+    boardroom: 'Board briefing',
+    meeting: 'Client meeting',
+    coffee: 'Kopi',
+    water_cooler: 'Rehat',
 };
 
 // Dekor: hiasan yang juga disekat (kecuali yang tiada cells)
 export const DECOR = [
     { kind: 'shelf', cells: [{ c: 4, r: 1 }, { c: 5, r: 1 }] },
     { kind: 'shelf', cells: [{ c: 1, r: 9 }, { c: 1, r: 10 }] },
-    // Partition separuh tinggi: bilik reception (kiri bawah) dan break room (kanan bawah)
+    // Partition separuh tinggi: reception (kiri bawah), break room, dan dinding toilet (c=21)
     { kind: 'partition_a', cells: [{ c: 2, r: 11 }, { c: 3, r: 11 }, { c: 4, r: 11 }, { c: 15, r: 12 }, { c: 17, r: 12 }] },
     { kind: 'partition_a_logo', cells: [{ c: 16, r: 12 }] },
-    { kind: 'partition_b', cells: [{ c: 5, r: 13 }, { c: 14, r: 13 }, { c: 14, r: 14 }] },
+    { kind: 'partition_b', cells: [{ c: 5, r: 13 }, { c: 14, r: 13 }, { c: 14, r: 14 }, { c: 21, r: 15 }, { c: 21, r: 16 }, { c: 21, r: 17 }, { c: 21, r: 18 }, { c: 21, r: 19 }] },
     { kind: 'partition_b_logo', cells: [{ c: 5, r: 12 }] },
     { kind: 'plant', cells: [{ c: 1, r: 4 }] },
     { kind: 'plant', cells: [{ c: 21, r: 6 }] },
     { kind: 'plant', cells: [{ c: 13, r: 15 }] },
     { kind: 'plant', cells: [{ c: 1, r: 15 }] },
+    { kind: 'plant', cells: [{ c: 23, r: 9 }] },
+    { kind: 'plant', cells: [{ c: 27, r: 12 }] },
+    { kind: 'plant', cells: [{ c: 22, r: 6 }] },
     { kind: 'server', cells: [{ c: 21, r: 9 }, { c: 21, r: 10 }] },
 ];
 
@@ -119,6 +190,10 @@ export const VENDOR_COLORS = {
     antigravity: 0x4285f4,
     generic: 0x64748b,
 };
+
+// Gaya watak. 'default' guna fail staff_{layer}.png, yang lain staff_{gaya}_{layer}.png
+export const AVATARS = ['default', 'woman', 'hiphop', 'genz'];
+export const AVATAR_LABELS = { default: 'Lelaki biasa', woman: 'Wanita', hiphop: 'Hip-hop', genz: 'Gen Z' };
 
 // Semua tile yang disekat: luar dinding, furniture, dan dekor
 export function blockedTiles() {
@@ -150,7 +225,7 @@ export function seatsFor(department) {
     return dept.cells.filter((cell) => cell.kind === 'desk').map((cell) => ({ c: cell.c, r: cell.r + 1 }));
 }
 
-// Tempat berdiri (bilik bermain)
+// Tempat berdiri (briefing, bilik bermain, pantry, toilet)
 export function standsFor(department) {
     return DEPARTMENTS[department]?.stands ?? [];
 }

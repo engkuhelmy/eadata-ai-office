@@ -1,4 +1,4 @@
-import { DEPARTMENTS, VENDOR_COLORS } from './layout';
+import { AVATARS, AVATAR_LABELS, DEPARTMENTS, VENDOR_COLORS } from './layout';
 import { applyBroadcast, getAgent, getEventsFor } from './state';
 import { esc, hex, fmtNum, lsGet, lsSet, relTime } from './util';
 
@@ -168,6 +168,10 @@ function buildDetail() {
         .map((k) => `<option value="${esc(k)}" ${a.pinned_department === k ? 'selected' : ''}>${esc(deptLabel(k))}</option>`)
         .join('');
 
+    const avatarOptions = AVATARS
+        .map((k) => `<option value="${esc(k)}" ${(a.avatar ?? 'default') === k ? 'selected' : ''}>${esc(AVATAR_LABELS[k] ?? k)}</option>`)
+        .join('');
+
     const form = CONFIG.canEdit ? `
         <form id="detail-form" class="edit">
             <label>Nama paparan
@@ -175,6 +179,9 @@ function buildDetail() {
             </label>
             <label>Department
                 <select name="department"><option value="">Auto (ikut kerja)</option>${options}</select>
+            </label>
+            <label>Gaya watak
+                <select name="avatar">${avatarOptions}</select>
             </label>
             <div class="actions"><button type="submit">Simpan</button><span id="detail-msg" class="muted"></span></div>
         </form>` : '<p class="muted small">Hanya owner boleh tukar nama dan department.</p>';
@@ -233,6 +240,7 @@ async function saveDetail(ev) {
     const body = {
         name: form.elements.namedItem('name').value,
         department: form.elements.namedItem('department').value || null,
+        avatar: form.elements.namedItem('avatar').value || 'default',
     };
 
     msg.textContent = 'Menyimpan...';

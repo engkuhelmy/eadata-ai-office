@@ -7,6 +7,7 @@ class DepartmentRouter
     public const DEPARTMENTS = [
         'door', 'kanban', 'frontend', 'backend', 'qa', 'deploy', 'research',
         'ops', 'meeting', 'approval', 'coffee', 'water_cooler', 'playroom',
+        'boardroom', 'pantry', 'toilet',
     ];
 
     private const FRONTEND_EXT = ['vue', 'tsx', 'jsx', 'css', 'scss', 'html'];
