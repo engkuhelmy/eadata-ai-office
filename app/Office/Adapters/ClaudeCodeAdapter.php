@@ -60,7 +60,27 @@ class ClaudeCodeAdapter extends BaseAdapter
             target: $this->redactor->target($command ?? $path),
             department: $department,
             ts: $this->ts($payload),
+            usage: $this->usage($payload['usage'] ?? null),
         );
+    }
+
+    /** Hanya integer >= 0 diterima; kalau tiada satu pun field sah, kembalikan null. */
+    private function usage(mixed $raw): ?array
+    {
+        if (! is_array($raw)) {
+            return null;
+        }
+
+        $usage = [];
+        $found = false;
+        foreach (['input', 'output', 'cache_read', 'cache_create'] as $key) {
+            $value = $raw[$key] ?? null;
+            $valid = is_int($value) && $value >= 0;
+            $usage[$key] = $valid ? $value : 0;
+            $found = $found || $valid;
+        }
+
+        return $found ? $usage : null;
     }
 
     private function isToolError(array $payload): bool

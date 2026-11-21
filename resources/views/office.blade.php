@@ -12,6 +12,9 @@
             csrf: @json(csrf_token()),
         };
     </script>
+    <script>
+        if (new URLSearchParams(location.search).get('tv') === '1') document.documentElement.classList.add('tv');
+    </script>
     @vite(['resources/js/office/main.js'])
     <style>
         :root { --bg: #1d1a17; --panel: #2a2521; --line: #3a332c; --text: #f5efe6; --muted: #a89c8c; --accent: #d97757; --sky: #78beeb; --navy: #183678; }
@@ -57,6 +60,54 @@
         form.edit .actions { display: flex; align-items: center; gap: 10px; }
         form.edit button { padding: 7px 14px; border: 0; border-radius: 6px; background: var(--accent); color: #1d1a17; font-weight: 600; cursor: pointer; }
         .events li { font-size: 12px; padding: 3px 0; border-bottom: 1px solid var(--line); }
+        .nav-link, .head-btn { font-size: 12px; padding: 3px 9px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); text-decoration: none; background: none; cursor: pointer; font-family: inherit; white-space: nowrap; }
+        .nav-link:hover, .head-btn:hover { color: var(--accent); border-color: var(--accent); }
+        section.fold { padding: 0; }
+        section.fold > summary { cursor: pointer; padding: 10px 12px; font-size: 14px; font-weight: 600; color: var(--accent); list-style: none; display: flex; justify-content: space-between; align-items: center; }
+        section.fold > summary::-webkit-details-marker { display: none; }
+        section.fold > summary::after { content: '+'; color: var(--muted); }
+        section.fold[open] > summary::after { content: '\2212'; }
+        section.fold > .fold-body { padding: 0 12px 10px; }
+        .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+        .filters select { min-width: 0; padding: 5px 6px; border-radius: 6px; border: 1px solid #4a4238; background: #1f1b18; color: var(--text); font-size: 12px; }
+        .warn { color: #f5b841; }
+        .plist li { display: grid; grid-template-columns: 10px 1fr auto auto; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+        .plist li.hv:not(:has(.dot)) { grid-template-columns: 1fr auto; }
+        .plist li.dp { grid-template-columns: 1fr 60px auto; }
+        .plist .dot { width: 10px; height: 10px; border-radius: 50%; }
+        .dp-bar { height: 6px; background: #1f1b18; border-radius: 3px; overflow: hidden; }
+        .dp-bar i { display: block; height: 100%; background: var(--accent); }
+        .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; }
+        .kpis div { background: #1f1b18; border-radius: 6px; padding: 6px 2px; }
+        .kpis b { display: block; font-size: 16px; }
+        .kpis span { font-size: 11px; color: var(--muted); }
+        .hours { display: flex; align-items: flex-end; gap: 2px; height: 48px; }
+        .hours .bar { flex: 1; height: 100%; display: flex; align-items: flex-end; background: #1f1b18; border-radius: 2px; }
+        .hours .bar i { display: block; width: 100%; background: var(--sky); border-radius: 2px; }
+        .hours-axis { display: flex; justify-content: space-between; margin-top: 2px; }
+        .board { display: grid; gap: 8px; }
+        .bcol h5 { margin: 0 0 4px; font-size: 12px; }
+        .bcol.attention h5 { color: #f5b841; }
+        .bcol.doing h5 { color: #10a37f; }
+        .bcol.done h5 { color: var(--muted); }
+        .bcard { display: grid; width: 100%; text-align: left; gap: 1px; background: #1f1b18; border: 1px solid var(--line); border-radius: 6px; color: var(--text); padding: 5px 8px; margin-bottom: 4px; cursor: pointer; font-family: inherit; font-size: 13px; }
+        .bcard:hover { border-color: var(--accent); }
+        #alert-bar { position: fixed; top: 8px; left: 50%; transform: translateX(-50%); z-index: 50; display: grid; gap: 6px; width: min(480px, calc(100vw - 16px)); }
+        .alert-item { display: flex; align-items: stretch; background: #3a2a14; border: 1px solid #f5b841; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+        .alert-item.error { background: #3a1616; border-color: #e53935; }
+        .alert-item.rate_limited { background: #1f2630; border-color: #64748b; }
+        .alert-open { flex: 1; text-align: left; background: none; border: 0; color: var(--text); padding: 9px 12px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+        .alert-close { background: none; border: 0; color: var(--muted); padding: 0 12px; font-size: 20px; cursor: pointer; }
+        /* Mod TV: ?tv=1 */
+        html.tv body { overflow: hidden; }
+        html.tv .head-right, html.tv aside { display: none; }
+        html.tv header { position: fixed; top: 0; left: 0; z-index: 5; background: none; border: 0; padding: 8px 12px; }
+        html.tv .brand img { width: 44px; height: 30px; }
+        html.tv .brand h1 { font-size: 14px; }
+        html.tv .brand .by { font-size: 10px; margin-top: 0; }
+        html.tv main { position: fixed; inset: 0; padding: 0; display: grid; place-items: center; gap: 0; }
+        html.tv #office-canvas { width: min(100vw, calc(100vh * 1280 / 720)); height: auto; border-radius: 0; }
+        html.tv.tv-idle, html.tv.tv-idle * { cursor: none !important; }
         @media (max-width: 860px) {
             main { grid-template-columns: 1fr; padding: 8px; }
             .brand .by { font-size: 11px; }
@@ -73,6 +124,9 @@
             </div>
         </div>
         <div class="head-right">
+            <a class="nav-link" href="/history">Sejarah</a>
+            <a class="nav-link" href="/?tv=1">Mod TV</a>
+            <button type="button" id="sound-toggle" class="head-btn">Bunyi: on</button>
             <span id="live-status" class="pill polling">Menyambung...</span>
             <form class="logout" method="POST" action="{{ route('logout') }}">
                 @csrf
@@ -83,14 +137,32 @@
     <main>
         <div id="office-canvas"></div>
         <aside>
-            <section>
-                <h2>Team</h2>
-                <div id="team"></div>
-            </section>
-            <section>
-                <h2>Feed live</h2>
-                <ul id="feed"></ul>
-            </section>
+            <details class="fold" open>
+                <summary>Team</summary>
+                <div class="fold-body">
+                    <div class="filters">
+                        <select id="flt-pc" aria-label="Tapis ikut PC"><option value="">Semua PC</option></select>
+                        <select id="flt-project" aria-label="Tapis ikut projek"><option value="">Semua projek</option></select>
+                    </div>
+                    <div id="team"></div>
+                </div>
+            </details>
+            <details class="fold" open>
+                <summary>Feed live</summary>
+                <div class="fold-body"><ul id="feed"></ul></div>
+            </details>
+            <details class="fold">
+                <summary>Sambungan</summary>
+                <div class="fold-body" id="panel-health"><p class="muted small">Memuatkan...</p></div>
+            </details>
+            <details class="fold">
+                <summary>Statistik hari ini</summary>
+                <div class="fold-body" id="panel-stats"><p class="muted small">Memuatkan...</p></div>
+            </details>
+            <details class="fold">
+                <summary>Papan tugas</summary>
+                <div class="fold-body" id="panel-board"><p class="muted small">Memuatkan...</p></div>
+            </details>
             <section id="detail">
                 <p class="muted">Klik staff (dalam office atau senarai Team) untuk tengok butiran dan tukar nama atau department.</p>
             </section>

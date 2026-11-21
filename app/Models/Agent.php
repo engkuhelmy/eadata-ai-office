@@ -17,6 +17,7 @@ class Agent extends Model
     protected $fillable = [
         'vendor', 'session_id', 'label', 'name', 'custom_name', 'pc', 'project',
         'department', 'pinned_department', 'status', 'current_task', 'last_event_at', 'ended_at',
+        'tokens_in', 'tokens_out', 'tokens_cache_read', 'tokens_cache_create',
     ];
 
     /** Nama yang dipaparkan: nama yang owner tetapkan, atau nama automatik. */

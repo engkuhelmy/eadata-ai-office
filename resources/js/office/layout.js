@@ -72,8 +72,24 @@ export const DEPARTMENTS = {
         label: 'Break time',
         spot: { c: 18, r: 13 },
         cells: [
-            { c: 16, r: 13, kind: 'sofa' }, { c: 17, r: 13, kind: 'sofa' },
+            { c: 16, r: 13, kind: 'sofa_blue' }, { c: 17, r: 13, kind: 'sofa_red' },
             { c: 20, r: 13, kind: 'cooler' },
+        ],
+    },
+    // Bilik bermain: staff yang "chill" (idle lebih 2 minit) berdiri sekeliling meja ping-pong dan foosball.
+    // stands = tempat berdiri (flip = menghadap kiri). Bukan kerusi, jadi tidak duduk.
+    playroom: {
+        label: 'Game Room',
+        spot: { c: 11, r: 12 },
+        cells: [
+            { c: 12, r: 12, kind: 'pong' }, { c: 13, r: 12, kind: 'pong' },
+            { c: 12, r: 13, kind: 'pong' }, { c: 13, r: 13, kind: 'pong' },
+            { c: 11, r: 15, kind: 'foos' }, { c: 12, r: 15, kind: 'foos' },
+        ],
+        stands: [
+            { c: 11, r: 12 }, { c: 11, r: 13 }, { c: 12, r: 11 }, { c: 13, r: 11 },
+            { c: 14, r: 12, flip: true }, { c: 12, r: 14 }, { c: 13, r: 14, flip: true },
+            { c: 10, r: 14 }, { c: 11, r: 14 }, { c: 10, r: 15 },
         ],
     },
 };
@@ -91,8 +107,6 @@ export const DECOR = [
     { kind: 'plant', cells: [{ c: 21, r: 6 }] },
     { kind: 'plant', cells: [{ c: 13, r: 15 }] },
     { kind: 'plant', cells: [{ c: 1, r: 15 }] },
-    { kind: 'pong', cells: [{ c: 12, r: 12 }, { c: 13, r: 12 }, { c: 12, r: 13 }, { c: 13, r: 13 }] },
-    { kind: 'foos', cells: [{ c: 19, r: 15 }, { c: 20, r: 15 }] },
     { kind: 'server', cells: [{ c: 21, r: 9 }, { c: 21, r: 10 }] },
 ];
 
@@ -132,6 +146,11 @@ export function seatsFor(department) {
     if (dept.seats) return dept.seats;
 
     return dept.cells.filter((cell) => cell.kind === 'desk').map((cell) => ({ c: cell.c, r: cell.r + 1 }));
+}
+
+// Tempat berdiri (bilik bermain)
+export function standsFor(department) {
+    return DEPARTMENTS[department]?.stands ?? [];
 }
 
 export function allSeats() {

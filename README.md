@@ -56,3 +56,21 @@ python -m unittest discover -s hooks/tests
 Sprite dijana oleh `python tools\make_sprites.py` (perlu Pillow) ke `public/assets/office/`.
 
 Rujukan penuh: [AI-OFFICE-HUB-BUILD.md](AI-OFFICE-HUB-BUILD.md).
+
+## Operasi
+
+Skrip untuk run harian di Windows (semua boleh dipanggil dari cwd mana-mana; guna `-Dry` untuk tengok dulu):
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\start-office.ps1      # start serve, reverb, queue, schedule + jadual health
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\stop-office.ps1       # stop proses projek ini sahaja
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\register-autostart.ps1   # Scheduled Task "AI Office Hub" (USER run sendiri)
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\unregister-autostart.ps1  # buang task tu
+```
+
+Log di `storage\logs\ops-*.log`. Panduan lanjut:
+
+- [docs/windows-services.md](docs/windows-services.md): autostart (Task Scheduler atau NSSM), log, health check, pasang semula hook.
+- [docs/cloudflare-tunnel.md](docs/cloudflare-tunnel.md): expose `office.eadata.my` guna Cloudflare Tunnel + Access (email OTP), nilai `.env`, troubleshooting.
+
+Set `TRUSTED_PROXIES=*` dalam `.env` bila di belakang tunnel/proxy (lihat `bootstrap/app.php`).

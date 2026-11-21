@@ -5,6 +5,7 @@ const MAX_EVENTS = 200;
 const state = {
     agents: new Map(),
     events: [],
+    loaded: false, // true selepas snapshot sebenar pertama dari /office/state
 };
 
 const listeners = new Set();
@@ -13,6 +14,7 @@ function snapshot() {
     return {
         agents: [...state.agents.values()],
         events: state.events,
+        loaded: state.loaded,
     };
 }
 
@@ -33,6 +35,7 @@ export function subscribe(fn) {
 export function setSnapshot({ agents = [], events = [] } = {}) {
     state.agents = new Map(agents.map((a) => [a.id, a]));
     state.events = events.slice(0, MAX_EVENTS);
+    state.loaded = true;
     emit();
 }
 

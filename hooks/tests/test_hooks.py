@@ -178,6 +178,78 @@ class SendTests(HookTestCase):
         self.assertEqual(captured['body']['tool_input'], {'file_path': 'a.php'})
 
 
+class ClaudeUsageTests(HookTestCase):
+    def transcript(self, lines):
+        path = self.tmp / 'transcript.jsonl'
+        path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        return str(path)
+
+    @staticmethod
+    def entry(inp, out, cread, ccreate, msg_id=None):
+        message = {'role': 'assistant', 'content': 'RAHSIA-TRANSKRIP',
+                   'usage': {'input_tokens': inp, 'output_tokens': out,
+                             'cache_read_input_tokens': cread, 'cache_creation_input_tokens': ccreate}}
+        if msg_id:
+            message['id'] = msg_id
+        return json.dumps({'type': 'assistant', 'message': message})
+
+    def test_sums_usage_and_tolerates_bad_lines(self):
+        path = self.transcript([
+            self.entry(1, 2, 3, 4),
+            'bukan json {{{',
+            json.dumps({'type': 'user', 'message': {'role': 'user', 'content': 'hai'}}),
+            json.dumps({'message': {'usage': {'input_tokens': 'x', 'output_tokens': 5}}}),
+            '',
+            self.entry(10, 20, 30, 40),
+        ])
+        self.assertEqual(hook.read_claude_usage({'transcript_path': path}),
+                         {'input': 11, 'output': 27, 'cache_read': 33, 'cache_create': 44})
+
+    def test_duplicate_message_ids_counted_once(self):
+        path = self.transcript([self.entry(1, 2, 3, 4, 'msg_1'), self.entry(1, 2, 3, 4, 'msg_1'), self.entry(5, 5, 5, 5, 'msg_2')])
+        self.assertEqual(hook.read_claude_usage({'transcript_path': path}),
+                         {'input': 6, 'output': 7, 'cache_read': 8, 'cache_create': 9})
+
+    def test_missing_or_invalid_path_returns_none(self):
+        self.assertIsNone(hook.read_claude_usage({}))
+        self.assertIsNone(hook.read_claude_usage({'transcript_path': 123}))
+        self.assertIsNone(hook.read_claude_usage({'transcript_path': str(self.tmp / 'tiada.jsonl')}))
+        self.assertIsNone(hook.read_claude_usage({'transcript_path': self.transcript(['x'])}))
+
+    def test_read_is_capped(self):
+        path = self.transcript([self.entry(1, 1, 1, 1), self.entry(1, 1, 1, 1)])
+        with mock.patch.object(hook, 'MAX_TRANSCRIPT_BYTES', len(self.entry(1, 1, 1, 1)) + 5):
+            self.assertEqual(hook.read_claude_usage({'transcript_path': path}),
+                             {'input': 1, 'output': 1, 'cache_read': 1, 'cache_create': 1})
+
+    def run_main(self, src, hook_event, path):
+        captured = {}
+        stdin = io.TextIOWrapper(io.BytesIO(json.dumps({
+            'hook_event_name': hook_event, 'session_id': 's1', 'transcript_path': path,
+        }).encode('utf-8')), encoding='utf-8')
+        with mock.patch.object(hook, 'spawn_background', captured.update), \
+                mock.patch.object(sys, 'stdin', stdin), redirect_stdout(io.StringIO()):
+            hook.main(['--src', src])
+        return captured
+
+    def test_stop_adds_only_totals_never_transcript(self):
+        path = self.transcript([self.entry(1, 2, 3, 4)])
+        data = self.run_main('claude', 'Stop', path)
+        self.assertEqual(data['body']['usage'], {'input': 1, 'output': 2, 'cache_read': 3, 'cache_create': 4})
+        self.assertNotIn('transcript_path', data['body'])
+        self.assertNotIn('RAHSIA-TRANSKRIP', json.dumps(data))
+        self.assertNotIn(path, json.dumps(data))
+
+    def test_usage_only_for_claude_stop(self):
+        path = self.transcript([self.entry(1, 2, 3, 4)])
+        self.assertNotIn('usage', self.run_main('claude', 'PreToolUse', path)['body'])
+        self.assertNotIn('usage', self.run_main('codex', 'Stop', path)['body'])
+
+    def test_stop_without_readable_transcript_has_no_usage(self):
+        data = self.run_main('claude', 'Stop', str(self.tmp / 'tiada.jsonl'))
+        self.assertNotIn('usage', data['body'])
+
+
 class AntigravityHookTests(HookTestCase):
     def test_tool_args_are_whitelisted_and_prompt_is_hashed(self):
         body = hook.sanitize({

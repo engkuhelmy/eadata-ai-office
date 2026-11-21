@@ -30,6 +30,7 @@ MAX_STDIN_BYTES = 1024 * 1024
 SEND_TIMEOUT = 3
 SPOOL_FLUSH_MAX = 100
 MAX_TARGET_CHARS = 200
+MAX_TRANSCRIPT_BYTES = 20 * 1024 * 1024
 
 # Field yang TAK PERNAH dihantar (isi fail, prompt, transkrip)
 DROP_KEYS = {
@@ -88,6 +89,50 @@ def redact(value):
     if isinstance(value, str):
         return redact_text(value)
     return value
+
+
+def read_claude_usage(payload):
+    """Jumlah token dari transkrip Claude (dibaca sebelum sanitize buang transcript_path).
+    Hanya jumlah dipulangkan, tiada isi transkrip. Tak pernah raise. None kalau tiada data."""
+    try:
+        path = payload.get('transcript_path')
+        if not isinstance(path, str) or not path:
+            return None
+        totals = {'input': 0, 'output': 0, 'cache_read': 0, 'cache_create': 0}
+        fields = (
+            ('input_tokens', 'input'), ('output_tokens', 'output'),
+            ('cache_read_input_tokens', 'cache_read'), ('cache_creation_input_tokens', 'cache_create'),
+        )
+        seen = set()
+        found = False
+        read = 0
+        with open(path, 'rb') as fh:
+            for raw in fh:
+                read += len(raw)
+                if read > MAX_TRANSCRIPT_BYTES:
+                    break
+                try:
+                    entry = json.loads(raw)
+                    message = entry.get('message') if isinstance(entry, dict) else None
+                    usage = message.get('usage') if isinstance(message, dict) else None
+                    if not isinstance(usage, dict):
+                        continue
+                    # Satu mesej boleh ditulis berkali-kali (satu baris setiap content block): kira sekali
+                    msg_id = message.get('id')
+                    if isinstance(msg_id, str) and msg_id:
+                        if msg_id in seen:
+                            continue
+                        seen.add(msg_id)
+                    for src_key, dst_key in fields:
+                        value = usage.get(src_key)
+                        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                            totals[dst_key] += value
+                    found = True
+                except Exception:
+                    continue
+        return totals if found else None
+    except Exception:
+        return None
 
 
 def sanitize(payload):
@@ -283,7 +328,12 @@ def main(argv):
         return
 
     payload = read_payload(argv)
-    body = sanitize(payload if isinstance(payload, dict) else {})
+    payload = payload if isinstance(payload, dict) else {}
+    body = sanitize(payload)
+    if src == 'claude' and payload.get('hook_event_name') == 'Stop':
+        usage = read_claude_usage(payload)
+        if usage:
+            body['usage'] = usage
     data = {'src': src, 'event': event, 'body': body}
 
     # Tangkap payload (sudah ditapis) untuk dijadikan fixture: OFFICE_HOOK_CAPTURE=1

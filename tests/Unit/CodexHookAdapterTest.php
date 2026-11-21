@@ -40,7 +40,7 @@ class CodexHookAdapterTest extends TestCase
         ]);
 
         $this->assertSame('turn_done', $e->event);
-        $this->assertSame('water_cooler', $e->department);
+        $this->assertNull($e->department); // kekal di meja; sweep hantar ke playroom lepas 2 minit
     }
 
     public function test_unknown_hook_event_is_ignored(): void

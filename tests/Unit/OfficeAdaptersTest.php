@@ -118,12 +118,12 @@ class OfficeAdaptersTest extends TestCase
         $this->assertNull($e->department);
     }
 
-    public function test_codex_legacy_notify_is_turn_done_to_water_cooler(): void
+    public function test_codex_legacy_notify_is_turn_done_and_stays_at_desk(): void
     {
         $e = $this->normalize('codex', 'codex/legacy_notify.json');
 
         $this->assertSame('turn_done', $e->event);
-        $this->assertSame('water_cooler', $e->department);
+        $this->assertNull($e->department);
         $this->assertSame('codex-thread-7b21', $e->agentKey);
     }
 

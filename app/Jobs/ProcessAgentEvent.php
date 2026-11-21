@@ -6,12 +6,14 @@ use App\Events\AgentUpdated;
 use App\Models\Agent;
 use App\Models\AgentEvent;
 use App\Office\NormalizedEvent;
+use App\Office\Notifier;
 use App\Office\OfficePresenter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
@@ -26,12 +28,16 @@ class ProcessAgentEvent implements ShouldQueue
     {
         $e = $this->event;
 
+        // Hook hantar waktu tempatan dengan ofset (cth. +08:00). Eloquent simpan jam tanpa tukar zon,
+        // jadi tukar ke zon app (UTC) dulu supaya sweep dan perbandingan masa betul.
+        $ts = Carbon::instance($e->ts)->setTimezone(config('app.timezone'));
+
         $attributes = [
             'label' => $e->label,
             'name' => $e->name,
             'status' => $this->statusFor($e->event),
-            'last_event_at' => $e->ts,
-            'ended_at' => $e->event === 'session_end' ? $e->ts : null,
+            'last_event_at' => $ts,
+            'ended_at' => $e->event === 'session_end' ? $ts : null,
         ];
 
         if ($e->pc !== null) {
@@ -50,10 +56,25 @@ class ProcessAgentEvent implements ShouldQueue
             $attributes['current_task'] = null;
         }
 
+        if ($e->usage !== null) {
+            // Ganti (bukan tambah): hook hantar jumlah keseluruhan transkrip setiap Stop.
+            $attributes['tokens_in'] = $e->usage['input'];
+            $attributes['tokens_out'] = $e->usage['output'];
+            $attributes['tokens_cache_read'] = $e->usage['cache_read'];
+            $attributes['tokens_cache_create'] = $e->usage['cache_create'];
+        }
+
+        $oldStatus = Agent::query()
+            ->where('vendor', $e->vendor)
+            ->where('session_id', $e->agentKey)
+            ->value('status');
+
         $agent = Agent::updateOrCreate(
             ['vendor' => $e->vendor, 'session_id' => $e->agentKey],
             $attributes,
         );
+
+        Notifier::statusChanged($agent, $oldStatus);
 
         $row = AgentEvent::create([
             'agent_id' => $agent->id,
@@ -61,7 +82,7 @@ class ProcessAgentEvent implements ShouldQueue
             'tool' => $e->tool,
             'target' => $e->target,
             'department' => $e->department,
-            'ts' => $e->ts,
+            'ts' => $ts,
         ]);
 
         try {

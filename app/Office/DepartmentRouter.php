@@ -6,7 +6,7 @@ class DepartmentRouter
 {
     public const DEPARTMENTS = [
         'door', 'kanban', 'frontend', 'backend', 'qa', 'deploy', 'research',
-        'ops', 'meeting', 'approval', 'coffee', 'water_cooler',
+        'ops', 'meeting', 'approval', 'coffee', 'water_cooler', 'playroom',
     ];
 
     private const FRONTEND_EXT = ['vue', 'tsx', 'jsx', 'css', 'scss', 'html'];
@@ -40,7 +40,9 @@ class DepartmentRouter
             'prompt' => 'kanban',
             'needs_approval' => 'approval',
             'rate_limited' => 'coffee',
-            'idle', 'turn_done' => 'water_cooler',
+            // Chill: kekal di meja dulu. office:sweep pindahkan ke bilik bermain (playroom)
+            // selepas idle 2 minit, supaya staff tak berulang-alik setiap kali satu turn tamat.
+            'idle', 'turn_done' => null,
             'subagent_start', 'subagent_stop' => 'meeting',
             'tool_error' => $this->isTestPath($target) ? 'qa' : null,
             'tool_start', 'tool_end' => $this->forTool($tool, $target, $command),

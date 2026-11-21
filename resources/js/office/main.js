@@ -4,11 +4,19 @@ import OfficeScene from './OfficeScene';
 import * as store from './state';
 import * as ui from './ui';
 import { connectRealtime } from './realtime';
+import { initPanels } from './panels';
+import { initNotify, checkTransitions } from './notify';
+import { initTv, isTv } from './tv';
+
+initTv();
+ui.initFilters();
+initNotify({ openAgent: (id) => ui.showDetail(id) });
+if (!isTv) initPanels({ onOpenAgent: (id) => ui.showDetail(id) });
 
 const scene = new OfficeScene();
 scene.onSelect = (id) => ui.showDetail(id);
 
-new Phaser.Game({
+window.__officeGame = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'office-canvas',
     width: 1280,
@@ -25,6 +33,7 @@ store.subscribe((snap) => {
     ui.renderTeam(snap.agents);
     ui.renderFeed(snap.events);
     ui.refreshDetail();
+    checkTransitions(snap.agents, snap.loaded);
     scene.render(snap.agents);
 });
 

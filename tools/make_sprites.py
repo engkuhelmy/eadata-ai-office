@@ -208,6 +208,9 @@ FRAMES = [
     dict(dy=4, seated=True, typing=1),
     dict(back=True, typing=0),
     dict(back=True, typing=1),
+    # 10-11: berdiri sambil bermain (tangan ke depan, bergilir). Guna lengan "typing" tetapi dengan kaki.
+    dict(typing=0),
+    dict(typing=1),
 ]
 
 
@@ -227,7 +230,19 @@ def staff_sheets():
 
 # ---------------------------------------------------------------- furniture
 
-WOOD = dict(top=(201, 147, 93, 255), hi=(226, 176, 118, 255), left=(160, 106, 62, 255), right=(128, 80, 44, 255))
+# Palet gaya pejabat Google: putih bersih, kayu maple cerah, aksen biru/merah/kuning/hijau.
+G_BLUE, G_RED, G_YELLOW, G_GREEN = (66, 133, 244, 255), (234, 67, 53, 255), (251, 188, 5, 255), (52, 168, 83, 255)
+GOOGLE = {'blue': G_BLUE, 'red': G_RED, 'yellow': G_YELLOW, 'green': G_GREEN}
+
+
+def shade(color, f):
+    return tuple(max(0, min(255, int(c * f))) for c in color[:3]) + (255,)
+
+
+# Meja: permukaan putih, sisi maple
+WOOD = dict(top=(248, 246, 240, 255), hi=(255, 255, 255, 255), left=(224, 198, 152, 255), right=(192, 162, 114, 255))
+MAPLE = dict(top=(236, 218, 184, 255), hi=(250, 238, 212, 255), left=(214, 188, 142, 255), right=(184, 154, 108, 255))
+WHITE = dict(top=(250, 250, 250, 255), hi=(255, 255, 255, 255), left=(226, 228, 232, 255), right=(196, 200, 206, 255))
 
 
 def box(d, hs, h, top, left, right, hi=None):
@@ -250,10 +265,10 @@ def desk():
     cx, cy = box(d, 64, 14, WOOD['top'], WOOD['left'], WOOD['right'], WOOD['hi'])
     # Grain
     for dx in (-14, -4, 8):
-        d.line([(cx + dx, cy - 14 + 8), (cx + dx + 10, cy - 14 + 3)], fill=(180, 126, 76, 255))
+        d.line([(cx + dx, cy - 14 + 8), (cx + dx + 10, cy - 14 + 3)], fill=(232, 228, 218, 255))
     # Laci pada muka kanan
     d.line([(cx + 4, cy - 6 + 5), (cx + 24, cy - 6 - 5)], fill=OL)
-    d.rectangle([cx + 12, cy - 3, cx + 15, cy - 1], fill=(222, 176, 120, 255))
+    d.rectangle([cx + 12, cy - 3, cx + 15, cy - 1], fill=G_BLUE)
     # Monitor (skrin 10x7 pada (23,21) ditindih animasi oleh Phaser)
     d.rectangle([21, 19, 34, 31], fill=(52, 52, 60, 255), outline=OL)
     d.rectangle([23, 21, 32, 27], fill=(20, 40, 28, 255))
@@ -269,22 +284,22 @@ def desk():
     return img
 
 
-def chair():
+def chair(color=G_BLUE):
     """Kerusi pejabat dilihat dari belakang. Tanah pada y=37. Sandaran rendah supaya
-    kepala dan bahu staff yang duduk nampak di atasnya (macam gambar rujukan)."""
+    kepala dan bahu staff yang duduk nampak di atasnya. Warna ikut palet Google."""
     img, d = new(32, 40)
-    base = (60, 60, 68, 255)
+    base = (96, 100, 108, 255)
     for end in ((5, 37), (27, 37), (10, 39), (22, 39)):
         d.line([(16, 34), end], fill=base, width=2)
     for x in (5, 27, 10, 22):
-        d.point((x, 38 if x in (5, 27) else 39), fill=(30, 30, 34, 255))
-    d.rectangle([15, 27, 17, 34], fill=(52, 52, 60, 255))
-    d.rounded_rectangle([5, 23, 27, 28], radius=2, fill=(52, 52, 60, 255), outline=OL)
-    d.rectangle([3, 20, 6, 27], fill=(44, 44, 52, 255), outline=OL)
-    d.rectangle([26, 20, 29, 27], fill=(44, 44, 52, 255), outline=OL)
-    d.rounded_rectangle([8, 12, 24, 25], radius=3, fill=(40, 40, 48, 255), outline=OL)
-    d.line([(10, 14), (22, 14)], fill=(88, 88, 100, 255))
-    d.line([(10, 15), (10, 22)], fill=(70, 70, 82, 255))
+        d.point((x, 38 if x in (5, 27) else 39), fill=(40, 40, 46, 255))
+    d.rectangle([15, 27, 17, 34], fill=(120, 124, 132, 255))
+    d.rounded_rectangle([5, 23, 27, 28], radius=2, fill=shade(color, 0.82), outline=OL)
+    d.rectangle([3, 20, 6, 27], fill=shade(color, 0.7), outline=OL)
+    d.rectangle([26, 20, 29, 27], fill=shade(color, 0.7), outline=OL)
+    d.rounded_rectangle([8, 12, 24, 25], radius=3, fill=color, outline=OL)
+    d.line([(10, 14), (22, 14)], fill=shade(color, 1.25))
+    d.line([(10, 15), (10, 22)], fill=shade(color, 1.12))
     return img
 
 
@@ -292,7 +307,7 @@ def partition():
     """Dinding separuh (partition) sepanjang paksi c, macam bilik dalam gambar rujukan.
     Tile center pada (28, 66). Flip mendatar untuk paksi r."""
     img, d = new(56, 80)
-    cream, cap, base, edge = (236, 218, 184, 255), (250, 240, 220, 255), (196, 150, 98, 255), (214, 192, 156, 255)
+    cream, cap, base, edge = (250, 250, 252, 255), (255, 255, 255, 255), G_BLUE, (214, 218, 224, 255)
     h = 46
     a, b = (14, 59), (42, 73)
     d.polygon([a, b, (b[0], b[1] - h), (a[0], a[1] - h)], fill=cream, outline=OL)
@@ -315,9 +330,9 @@ def partition_poster():
 
 def plant():
     img, d = new(48, 64)
-    d.polygon([(14, 46), (34, 46), (31, 60), (17, 60)], fill=(190, 96, 54, 255), outline=OL)
-    d.rectangle([12, 43, 35, 47], fill=(214, 124, 76, 255), outline=OL)
-    d.line([(16, 50), (30, 50)], fill=(160, 78, 44, 255))
+    d.polygon([(14, 46), (34, 46), (31, 60), (17, 60)], fill=(244, 244, 246, 255), outline=OL)
+    d.rectangle([12, 43, 35, 47], fill=(255, 255, 255, 255), outline=OL)
+    d.line([(16, 52), (30, 52)], fill=G_YELLOW)
     d.ellipse([24, 36, 24, 36], fill=OL)
     d.line([(24, 44), (24, 34)], fill=(80, 54, 30, 255), width=2)
     dark, mid, light = (44, 90, 48, 255), (68, 124, 62, 255), (104, 162, 88, 255)
@@ -334,8 +349,8 @@ def plant():
 
 def shelf():
     img, d = new(56, 70)
-    cx, cy = box(d, 70, 42, (110, 74, 42, 255), (96, 62, 34, 255), (78, 48, 26, 255), (140, 98, 58, 255))
-    books = [(178, 40, 40), (40, 84, 170), (46, 128, 70), (200, 148, 36), (120, 64, 170), (200, 80, 120), (210, 110, 40)]
+    cx, cy = box(d, 70, 42, (244, 240, 230, 255), (232, 214, 180, 255), (206, 184, 144, 255), (255, 255, 255, 255))
+    books = [(234, 67, 53), (66, 133, 244), (52, 168, 83), (251, 188, 5), (66, 133, 244), (234, 67, 53), (52, 168, 83)]
     rnd = random.Random(3)
     for row in range(3):
         for face in ('L', 'R'):
@@ -364,20 +379,20 @@ def cooler():
     return img
 
 
-def sofa():
+def sofa(color=G_RED):
     img, d = new(56, 58)
     cx, cy = 28, 58 - 14
-    red, red_l, red_r, red_t = (196, 72, 44, 255), (150, 50, 30, 255), (120, 38, 22, 255), (214, 96, 60, 255)
-    d.polygon([(cx - 28, cy - 12), (cx, cy - 12 - 14), (cx, cy - 12 - 14 - 16), (cx - 28, cy - 12 - 16)], fill=red_l, outline=OL)
-    d.polygon([(cx, cy - 12 - 14), (cx + 28, cy - 12), (cx + 28, cy - 12 - 16), (cx, cy - 12 - 14 - 16)], fill=red_r, outline=OL)
-    box(d, 58, 12, red_t, red_l, red_r, (232, 130, 90, 255))
-    d.line([(cx, cy - 12 - 14), (cx, cy - 12 + 14)], fill=(150, 50, 30, 255))
+    t, l, r = shade(color, 1.08), shade(color, 0.78), shade(color, 0.6)
+    d.polygon([(cx - 28, cy - 12), (cx, cy - 12 - 14), (cx, cy - 12 - 14 - 16), (cx - 28, cy - 12 - 16)], fill=l, outline=OL)
+    d.polygon([(cx, cy - 12 - 14), (cx + 28, cy - 12), (cx + 28, cy - 12 - 16), (cx, cy - 12 - 14 - 16)], fill=r, outline=OL)
+    box(d, 58, 12, t, l, r, shade(color, 1.3))
+    d.line([(cx, cy - 12 - 14), (cx, cy - 12 + 14)], fill=l)
     return img
 
 
 def machine():
     img, d = new(56, 68)
-    cx, cy = box(d, 68, 18, (140, 98, 62, 255), (100, 66, 40, 255), (78, 50, 30, 255), (170, 124, 82, 255))
+    cx, cy = box(d, 68, 18, WHITE['top'], MAPLE['left'], MAPLE['right'], WHITE['hi'])
     d.rectangle([14, cy - 18 - 24, 30, cy - 18 - 2], fill=(54, 54, 62, 255), outline=OL)
     d.rectangle([17, cy - 18 - 20, 27, cy - 18 - 14], fill=(30, 30, 36, 255))
     d.rectangle([24, cy - 18 - 12, 25, cy - 18 - 11], fill=(230, 60, 60, 255))
@@ -399,7 +414,7 @@ def server():
 
 def pong():
     img, d = new(56, 42)
-    cx, cy = box(d, 42, 6, (48, 130, 70, 255), (30, 90, 48, 255), (22, 70, 38, 255))
+    cx, cy = box(d, 42, 6, G_BLUE, shade(G_BLUE, 0.7), shade(G_BLUE, 0.55))
     d.polygon([(cx, cy - 6 - 11), (cx + 22, cy - 6), (cx, cy - 6 + 11), (cx - 22, cy - 6)], outline=(240, 240, 240, 255))
     d.line([(cx - 11, cy - 6 - 6), (cx + 11, cy - 6 + 6)], fill=(240, 240, 240, 255))
     d.line([(cx - 12, cy - 6 - 6), (cx - 12, cy - 6 - 11)], fill=(200, 200, 210, 255))
@@ -409,7 +424,7 @@ def pong():
 
 def foos():
     img, d = new(56, 46)
-    cx, cy = box(d, 46, 10, (40, 120, 190, 255), (28, 84, 140, 255), (20, 62, 108, 255), (90, 160, 220, 255))
+    cx, cy = box(d, 46, 10, G_GREEN, shade(G_GREEN, 0.72), shade(G_GREEN, 0.56), (140, 214, 160, 255))
     for k in range(-2, 3):
         d.line([(cx + k * 4 - 8, cy - 10 + k * 2 + 6), (cx + k * 4 + 8, cy - 10 + k * 2 - 2)], fill=(200, 200, 210, 255))
     for k in range(-2, 3):
@@ -419,7 +434,7 @@ def foos():
 
 def table():
     img, d = new(56, 52)
-    cx, cy = box(d, 52, 10, (176, 128, 80, 255), (130, 88, 52, 255), (104, 68, 38, 255), (206, 160, 106, 255))
+    cx, cy = box(d, 52, 10, WOOD['top'], MAPLE['left'], MAPLE['right'], WOOD['hi'])
     d.polygon([(cx - 10, cy - 10), (cx, cy - 15), (cx + 8, cy - 11), (cx - 2, cy - 6)], fill=(236, 232, 218, 255), outline=OL)
     d.rectangle([cx + 6, cy - 22, cx + 14, cy - 15], fill=(60, 60, 70, 255), outline=OL)
     d.polygon([(cx + 4, cy - 10), (cx + 13, cy - 8), (cx + 8, cy - 4), (cx - 1, cy - 6)], fill=(110, 190, 150, 255), outline=OL)
@@ -428,7 +443,7 @@ def table():
 
 def reception():
     img, d = new(56, 58)
-    cx, cy = box(d, 58, 16, (186, 130, 78, 255), (140, 90, 52, 255), (112, 70, 38, 255), (218, 166, 108, 255))
+    cx, cy = box(d, 58, 16, WHITE['top'], G_BLUE, shade(G_BLUE, 0.72), WHITE['hi'])
     d.rectangle([cx + 6, cy - 12, cx + 20, cy - 3], fill=(250, 246, 232, 255), outline=OL)
     d.line([(cx + 8, cy - 8), (cx + 17, cy - 8)], fill=(90, 150, 200, 255))
     d.rectangle([cx - 12, cy - 16 - 12, cx - 2, cy - 16 - 4], fill=(52, 52, 60, 255), outline=OL)
@@ -455,7 +470,7 @@ def floor_tile(base, seed):
             shift = rnd.choice((-14, -8, 8, 12))
             col = tuple(max(0, min(255, c + shift)) for c in base[:3]) + (255,)
             d.line([(x, y), (x + rnd.randint(1, 4), y)], fill=col)
-    d.polygon(pts, outline=(150, 100, 56, 255))
+    d.polygon(pts, outline=(190, 170, 136, 255))
     return img
 
 
@@ -483,25 +498,26 @@ def pixel_text(img, xy, text, size, fill):
 
 def wall_window():
     img, d = new(45, 58)
-    d.rectangle([0, 0, 44, 57], fill=(124, 80, 46, 255), outline=OL)
+    frame = (240, 242, 246, 255)
+    d.rectangle([0, 0, 44, 57], fill=frame, outline=OL)
     for y in range(3, 52):
         t = (y - 3) / 48
-        col = (255, int(214 + 30 * t), int(128 + 70 * t), 255)
+        col = (int(176 + 60 * t), int(212 + 36 * t), 255, 255)  # langit siang: biru muda ke putih
         d.line([(3, y), (41, y)], fill=col)
     for y in range(5, 30, 4):
-        d.line([(3, y), (41, y)], fill=(224, 172, 96, 255))
-    d.rectangle([21, 3, 23, 51], fill=(124, 80, 46, 255))
-    d.rectangle([3, 30, 41, 32], fill=(124, 80, 46, 255))
-    d.rectangle([0, 52, 44, 57], fill=(150, 98, 56, 255), outline=OL)
-    d.line([(4, 5), (14, 5)], fill=(255, 250, 220, 255))
+        d.line([(3, y), (41, y)], fill=(206, 224, 244, 255))  # bidai
+    d.rectangle([21, 3, 23, 51], fill=frame)
+    d.rectangle([3, 30, 41, 32], fill=frame)
+    d.rectangle([0, 52, 44, 57], fill=(214, 218, 224, 255), outline=OL)
+    d.line([(4, 5), (14, 5)], fill=(255, 255, 255, 255))
     return img
 
 
 def wall_board():
     img, d = new(73, 58)
-    d.rectangle([0, 0, 72, 57], fill=(190, 122, 72, 255), outline=OL)
-    d.rectangle([3, 3, 69, 49], fill=(248, 250, 252, 255), outline=(150, 120, 90, 255))
-    d.rectangle([3, 51, 69, 55], fill=(150, 96, 56, 255))
+    d.rectangle([0, 0, 72, 57], fill=(226, 228, 232, 255), outline=OL)
+    d.rectangle([3, 3, 69, 49], fill=(250, 251, 252, 255), outline=(176, 180, 188, 255))
+    d.rectangle([3, 51, 69, 55], fill=G_BLUE)
     pts = [(8, 38), (18, 32), (28, 35), (40, 22), (52, 26), (64, 12)]
     d.line(pts, fill=(34, 160, 90, 255), width=2)
     for i, (x, h, col) in enumerate(((10, 10, (230, 130, 60)), (16, 16, (60, 120, 200)), (22, 12, (230, 130, 60)))):
@@ -581,10 +597,12 @@ def build(preview=None):
         sheet.save(OUT / f'staff_{name}.png')
 
     assets = {
-        'desk': desk(), 'chair': chair(), 'plant': plant(), 'shelf': shelf(), 'cooler': cooler(),
-        'sofa': sofa(), 'machine': machine(), 'server': server(), 'pong': pong(), 'foos': foos(),
+        'desk': desk(), 'plant': plant(), 'shelf': shelf(), 'cooler': cooler(),
+        'machine': machine(), 'server': server(), 'pong': pong(), 'foos': foos(),
+        **{f'chair_{name}': chair(color) for name, color in GOOGLE.items()},
+        **{f'sofa_{name}': sofa(color) for name, color in GOOGLE.items()},
         'table': table(), 'reception': reception(), 'bell': bell(),
-        'floor_a': floor_tile((234, 180, 114, 255), 1), 'floor_b': floor_tile((206, 142, 82, 255), 2),
+        'floor_a': floor_tile((238, 224, 196, 255), 1), 'floor_b': floor_tile((226, 208, 174, 255), 2),
     }
     for name, img in assets.items():
         img.save(OUT / f'{name}.png')

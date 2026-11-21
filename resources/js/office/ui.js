@@ -1,5 +1,6 @@
 import { DEPARTMENTS, VENDOR_COLORS } from './layout';
 import { applyBroadcast, getAgent, getEventsFor } from './state';
+import { esc, hex, fmtNum, lsGet, lsSet } from './util';
 
 // Dari Blade: { canEdit, departments, csrf }
 const CONFIG = window.OFFICE ?? { canEdit: false, departments: [], csrf: '' };
@@ -24,14 +25,45 @@ const STATUS_COLOR = {
 
 let selectedId = null;
 
-const esc = (value) =>
-    String(value ?? '').replace(/[&<>"']/g, (ch) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-    })[ch]);
-
-const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
-
 const el = (id) => document.getElementById(id);
+
+// Penapis Team (PC, Projek): disimpan dalam localStorage
+const FILTER_KEYS = { pc: 'office.filter.pc', project: 'office.filter.project' };
+const filters = { pc: lsGet(FILTER_KEYS.pc, ''), project: lsGet(FILTER_KEYS.project, '') };
+let lastAgents = [];
+let filterSig = '';
+
+function fillSelect(select, values, current, allLabel) {
+    select.innerHTML = `<option value="">${esc(allLabel)}</option>` +
+        values.map((v) => `<option value="${esc(v)}" ${v === current ? 'selected' : ''}>${esc(v)}</option>`).join('');
+}
+
+function syncFilterOptions(agents) {
+    const pcSel = el('flt-pc');
+    const prSel = el('flt-project');
+    if (!pcSel || !prSel || !agents.length) return;
+
+    const pcs = [...new Set(agents.map((a) => a.pc).filter(Boolean))].sort();
+    const projects = [...new Set(agents.map((a) => a.project).filter(Boolean))].sort();
+    if (filters.pc && !pcs.includes(filters.pc)) filters.pc = '';
+    if (filters.project && !projects.includes(filters.project)) filters.project = '';
+
+    const sig = JSON.stringify([pcs, projects, filters.pc, filters.project]);
+    if (sig === filterSig) return;
+    filterSig = sig;
+    fillSelect(pcSel, pcs, filters.pc, 'Semua PC');
+    fillSelect(prSel, projects, filters.project, 'Semua projek');
+}
+
+export function initFilters() {
+    [['flt-pc', 'pc'], ['flt-project', 'project']].forEach(([id, key]) => {
+        el(id)?.addEventListener('change', (e) => {
+            filters[key] = e.target.value;
+            lsSet(FILTER_KEYS[key], filters[key]);
+            renderTeam(lastAgents);
+        });
+    });
+}
 
 export function setStatus(status) {
     const node = el('live-status');
@@ -44,8 +76,13 @@ export function renderTeam(agents) {
     const node = el('team');
     if (!node) return;
 
+    lastAgents = agents;
+    syncFilterOptions(agents);
+
     const groups = {};
     for (const a of agents) {
+        if (filters.pc && a.pc !== filters.pc) continue;
+        if (filters.project && a.project !== filters.project) continue;
         const key = a.project || 'Tanpa projek';
         (groups[key] ??= []).push(a);
     }
@@ -63,7 +100,10 @@ export function renderTeam(agents) {
         return `<h3>${esc(project)} <span class="count">${groups[project].length}</span></h3><ul>${rows}</ul>`;
     }).join('');
 
-    node.innerHTML = html || '<p class="muted">Tiada agent lagi. Jalankan <code>php artisan office:simulate</code>.</p>';
+    const empty = agents.length
+        ? '<p class="muted">Tiada agent padan dengan penapis.</p>'
+        : '<p class="muted">Tiada agent lagi. Jalankan <code>php artisan office:simulate</code>.</p>';
+    node.innerHTML = html || empty;
     node.querySelectorAll('.row').forEach((row) => {
         row.addEventListener('click', () => showDetail(Number(row.dataset.id)));
     });
@@ -90,6 +130,7 @@ export function showDetail(id) {
     selectedId = id;
     buildDetail();
     refreshDetail();
+    el('detail')?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
 }
 
 // Bina struktur panel sekali bila pilihan berubah, supaya form tak hilang bila data refresh
@@ -125,6 +166,15 @@ function buildDetail() {
     node.querySelector('#detail-form')?.addEventListener('submit', saveDetail);
 }
 
+function tokenRow(u) {
+    if (!u) return '';
+    const input = Number(u.input) || 0;
+    const output = Number(u.output) || 0;
+    const cache = (Number(u.cache_read) || 0) + (Number(u.cache_create) || 0);
+    if (!input && !output && !cache) return '';
+    return `<dt>Token</dt><dd>Input ${fmtNum(input)} · Output ${fmtNum(output)} · Cache ${fmtNum(cache)}</dd>`;
+}
+
 export function refreshDetail() {
     const node = el('detail');
     if (!node) return;
@@ -145,7 +195,7 @@ export function refreshDetail() {
         <dt>Projek</dt><dd>${esc(a.project ?? '-')}</dd>
         <dt>Department</dt><dd>${esc(deptLabel(a.department))}${a.pinned_department ? ' <span class="pin">dipin</span>' : ''}</dd>
         <dt>Status</dt><dd>${esc(STATUS_LABEL[a.status] ?? a.status)}</dd>
-        <dt>Task</dt><dd>${esc(a.current_task ?? '-')}</dd>`;
+        <dt>Task</dt><dd>${esc(a.current_task ?? '-')}</dd>${tokenRow(a.usage)}`;
 
     const events = getEventsFor(selectedId, 10).map((e) =>
         `<li><span class="time">${esc(e.ts ? new Date(e.ts).toLocaleTimeString('ms-MY', { hour12: false }) : '')}</span> ${esc(e.event)} <span class="muted">${esc([e.tool, e.target].filter(Boolean).join(' '))}</span></li>`

@@ -1,0 +1,70 @@
+<?php
+
+namespace App\Console\Commands;
+
+use App\Events\AgentUpdated;
+use App\Models\Agent;
+use App\Office\OfficePresenter;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
+use Throwable;
+
+class OfficeSweep extends Command
+{
+    protected $signature = 'office:sweep
+        {--chill=120 : Saat idle sebelum staff pergi ke bilik bermain}
+        {--idle=600 : Saat tanpa event sebelum agent aktif dianggap idle}
+        {--end=3600 : Saat tanpa event sebelum agent dianggap tamat}';
+
+    protected $description = 'Kemas kini keadaan staff: idle (10 min), tamat (60 min), dan chill ke bilik bermain (2 min idle)';
+
+    public function handle(): int
+    {
+        $now = now();
+        $chillAfter = $now->copy()->subSeconds((int) $this->option('chill'));
+        $idleAfter = $now->copy()->subSeconds((int) $this->option('idle'));
+        $endAfter = $now->copy()->subSeconds((int) $this->option('end'));
+
+        $changed = 0;
+
+        Agent::query()->whereNull('ended_at')->each(function (Agent $agent) use ($now, $chillAfter, $idleAfter, $endAfter, &$changed) {
+            $last = $agent->last_event_at ?? $agent->updated_at;
+
+            if ($last < $endAfter) {
+                $agent->fill(['status' => Agent::STATUS_ENDED, 'ended_at' => $now, 'current_task' => null]);
+            } else {
+                // needs_approval sengaja dibiar: agent tu memang tunggu manusia
+                if ($last < $idleAfter && in_array($agent->status, [Agent::STATUS_ACTIVE, Agent::STATUS_ERROR, Agent::STATUS_RATE_LIMITED], true)) {
+                    $agent->status = Agent::STATUS_IDLE;
+                }
+
+                $chill = $agent->status === Agent::STATUS_IDLE
+                    && $last < $chillAfter
+                    && $agent->pinned_department === null
+                    && $agent->department !== 'playroom';
+
+                if ($chill) {
+                    $agent->department = 'playroom';
+                    $agent->current_task = null;
+                }
+            }
+
+            if (! $agent->isDirty()) {
+                return;
+            }
+
+            $agent->save();
+            $changed++;
+
+            try {
+                AgentUpdated::dispatch(OfficePresenter::agent($agent->refresh()));
+            } catch (Throwable $exception) {
+                Log::warning('AgentUpdated broadcast failed (sweep)', ['message' => $exception->getMessage()]);
+            }
+        });
+
+        $this->info("Sweep selesai: {$changed} staff dikemas kini.");
+
+        return self::SUCCESS;
+    }
+}

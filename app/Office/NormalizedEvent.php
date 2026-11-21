@@ -25,6 +25,8 @@ final readonly class NormalizedEvent
         public ?string $target,
         public ?string $department,
         public DateTimeImmutable $ts,
+        /** @var array{input:int,output:int,cache_read:int,cache_create:int}|null Jumlah token sesi (Claude Stop). */
+        public ?array $usage = null,
     ) {
         if (! in_array($event, self::EVENTS, true)) {
             throw new InvalidArgumentException("Unknown event: {$event}");

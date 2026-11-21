@@ -27,6 +27,12 @@ class OfficePresenter
             'current_task' => $agent->current_task,
             'last_event_at' => $agent->last_event_at?->toIso8601String(),
             'ended_at' => $agent->ended_at?->toIso8601String(),
+            'usage' => [
+                'input' => (int) $agent->tokens_in,
+                'output' => (int) $agent->tokens_out,
+                'cache_read' => (int) $agent->tokens_cache_read,
+                'cache_create' => (int) $agent->tokens_cache_create,
+            ],
         ];
     }
 
