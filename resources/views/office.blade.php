@@ -47,6 +47,9 @@
         #team .row .meta { display: none; }
         #team .row .task { grid-column: 2 / 4; color: var(--muted); font-size: 12px; }
         #team .row .status { font-size: 12px; }
+        #team details.ended { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 6px; }
+        #team details.ended summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+        #team .ended-row { opacity: 0.7; }
         #feed { max-height: 260px; overflow: auto; font-size: 12px; }
         #feed li { padding: 3px 0; border-bottom: 1px solid var(--line); }
         .time { color: var(--muted); font-variant-numeric: tabular-nums; }

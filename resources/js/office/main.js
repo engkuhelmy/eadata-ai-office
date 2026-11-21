@@ -30,7 +30,7 @@ window.__officeGame = new Phaser.Game({
 });
 
 store.subscribe((snap) => {
-    ui.renderTeam(snap.agents);
+    ui.renderTeam(snap.agents, snap.ended);
     ui.renderFeed(snap.events);
     ui.refreshDetail();
     checkTransitions(snap.agents, snap.loaded);

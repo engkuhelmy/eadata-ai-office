@@ -34,6 +34,16 @@ class OfficeController extends Controller
             ->map(fn (Agent $agent) => OfficePresenter::agent($agent))
             ->values();
 
+        // Sesi yang tamat dalam 24 jam: dipaparkan dalam "Tamat 24 jam" supaya maklumat tak hilang.
+        $ended = Agent::query()
+            ->whereNotNull('ended_at')
+            ->where('ended_at', '>', now()->subDay())
+            ->orderByDesc('ended_at')
+            ->limit(30)
+            ->get()
+            ->map(fn (Agent $agent) => OfficePresenter::agent($agent))
+            ->values();
+
         $events = AgentEvent::query()
             ->with('agent')
             ->orderByDesc('ts')
@@ -44,6 +54,7 @@ class OfficeController extends Controller
 
         return response()->json([
             'agents' => $agents,
+            'ended' => $ended,
             'events' => $events,
             'generated_at' => now()->toIso8601String(),
         ]);

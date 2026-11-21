@@ -1,6 +1,6 @@
 import { DEPARTMENTS, VENDOR_COLORS } from './layout';
 import { applyBroadcast, getAgent, getEventsFor } from './state';
-import { esc, hex, fmtNum, lsGet, lsSet } from './util';
+import { esc, hex, fmtNum, lsGet, lsSet, relTime } from './util';
 
 // Dari Blade: { canEdit, departments, csrf }
 const CONFIG = window.OFFICE ?? { canEdit: false, departments: [], csrf: '' };
@@ -72,11 +72,31 @@ export function setStatus(status) {
     node.className = status === 'live' ? 'pill live' : 'pill polling';
 }
 
-export function renderTeam(agents) {
+let lastEnded = [];
+let endedOpen = false;
+
+// Senarai sesi yang tamat dalam 24 jam, supaya maklumat agent tak hilang bila sweep tamatkan sesi senyap.
+function endedSection() {
+    const list = lastEnded.filter((a) => (!filters.pc || a.pc === filters.pc) && (!filters.project || a.project === filters.project));
+    if (!list.length) return '';
+
+    const rows = list.map((a) => `
+        <li data-id="${a.id}" class="row ended-row">
+            <span class="dot" style="background:${hex(VENDOR_COLORS[a.vendor] ?? 0x64748b)}"></span>
+            <span class="name">${esc(a.name)}</span>
+            <span class="status muted">${esc(relTime(a.ended_at ?? a.last_event_at))}</span>
+            <span class="task">${esc(a.label ?? '')}${a.project ? ' · ' + esc(a.project) : ''}</span>
+        </li>`).join('');
+
+    return `<details class="ended" ${endedOpen ? 'open' : ''}><summary>Tamat 24 jam <span class="count">${list.length}</span></summary><ul>${rows}</ul></details>`;
+}
+
+export function renderTeam(agents, ended = lastEnded) {
     const node = el('team');
     if (!node) return;
 
     lastAgents = agents;
+    lastEnded = ended ?? [];
     syncFilterOptions(agents);
 
     const groups = {};
@@ -103,9 +123,12 @@ export function renderTeam(agents) {
     const empty = agents.length
         ? '<p class="muted">Tiada agent padan dengan penapis.</p>'
         : '<p class="muted">Tiada agent lagi. Jalankan <code>php artisan office:simulate</code>.</p>';
-    node.innerHTML = html || empty;
+    node.innerHTML = (html || (lastEnded.length ? '<p class="muted">Tiada agent aktif sekarang.</p>' : empty)) + endedSection();
     node.querySelectorAll('.row').forEach((row) => {
         row.addEventListener('click', () => showDetail(Number(row.dataset.id)));
+    });
+    node.querySelector('details.ended')?.addEventListener('toggle', (ev) => {
+        endedOpen = ev.currentTarget.open;
     });
 }
 
