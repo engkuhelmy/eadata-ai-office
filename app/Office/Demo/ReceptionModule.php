@@ -50,20 +50,21 @@ class ReceptionModule
         'Intern Sara' => 'training',
     ];
 
-    /** Semua tempat yang Reni lawat bergilir-gilir: seluruh bangunan, L1 -> Rooftop. */
+    /** Semua tempat yang Reni lawat bergilir-gilir: seluruh bangunan, L1 -> Rooftop (urutan ini = urutan pusingan). */
     public const PLACES = [
         // L1
-        'training' => 'Training Area', 'sales' => 'Sales', 'client' => 'Client Space', 'meeting' => 'Meeting Room',
-        'pantry' => 'Pantry',
+        'training' => 'Training Room', 'client' => 'Client Space', 'meeting' => 'Client Meeting Room',
+        'auditorium' => 'Auditorium', 'pantry' => 'Pantry',
         // L2
-        'marketing' => 'Marketing', 'kanban' => 'Marketing Plan', 'head_office' => 'Head of Department',
+        'sales' => 'Sales', 'marketing' => 'Marketing', 'kanban' => 'Marketing Plan', 'head_office' => 'Head of Department',
         'frontend' => 'IT Frontend', 'backend' => 'IT Backend', 'qa' => 'IT QA', 'research' => 'IT Research',
-        'deploy' => 'IT DevOps', 'ops' => 'IT Ops', 'boardroom' => 'Big Meeting Room', 'coffee' => 'Big Pantry',
+        'deploy' => 'IT DevOps', 'ops' => 'IT Ops', 'coffee' => 'Big Pantry',
         // L3
-        'ceo' => 'CEO Office', 'cfo' => 'CFO Office', 'md' => 'MD Office', 'hod' => 'HOD Office',
-        'playroom' => 'Chill Area', 'gaming' => 'Gaming Area', 'outdoor_work' => 'Outdoor Working',
-        // L4
-        'rooftop' => 'Rooftop',
+        'boardroom' => 'Big Meeting Room', 'ceo' => 'CEO Office', 'cfo' => 'CFO Office', 'md' => 'MD Office',
+        'hod' => 'HOD Office',
+        // L1 (Chill & Game) + Rooftop
+        'playroom' => 'Chill Area', 'gaming' => 'Gaming Area',
+        'pool' => 'Swimming Pool', 'rooftop' => 'Rooftop Garden',
     ];
 
     private const IDLE_ROUND_AFTER = 180;

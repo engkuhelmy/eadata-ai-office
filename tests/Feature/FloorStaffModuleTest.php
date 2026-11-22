@@ -22,7 +22,7 @@ class FloorStaffModuleTest extends TestCase
 
     private const NEW_DEPARTMENTS = [
         'training', 'sales', 'client', 'marketing', 'head_office', 'toilet_2', 'outdoor_chill',
-        'ceo', 'cfo', 'md', 'hod', 'gaming', 'outdoor_work', 'rooftop',
+        'ceo', 'cfo', 'md', 'hod', 'gaming', 'auditorium', 'pool', 'rooftop',
     ];
 
     private float $t = 1000.0;
@@ -35,13 +35,19 @@ class FloorStaffModuleTest extends TestCase
 
     private int $pantryMax = 0;
 
+    private int $seed = 11;
+
+    private const PARTY_TEXTS = ['Pool party!', 'Bakar BBQ di rooftop'];
+
+    private const LAUNCH_TEXTS = ['Pelancaran produk baharu', 'Hadir pelancaran produk'];
+
     /**
      * Modul dengan jam palsu, rawak berbenih dan pintu pantri ujian (had 2, boleh diisi orang lain dulu).
      * $dispatch: hantar juga ke ProcessAgentEvent (DB) atau log sahaja (laju).
      */
-    private function module(bool $dispatch = false, ?Closure $enter = null, float $speed = 1.0): FloorStaffModule
+    private function module(bool $dispatch = false, ?Closure $enter = null, float $speed = 1.0, bool $events = false, ?Closure $rotators = null, ?Closure $rotHook = null): FloorStaffModule
     {
-        mt_srand(11);
+        mt_srand($this->seed);
 
         return new FloorStaffModule(
             function (array $m, string $event, ?string $tool, ?string $target, ?string $department) use ($dispatch): void {
@@ -68,6 +74,9 @@ class FloorStaffModuleTest extends TestCase
             function (string $sid): void {
                 unset($this->pantry[$sid]);
             },
+            $events,
+            $rotators,
+            $rotHook,
         );
     }
 
@@ -291,6 +300,336 @@ class FloorStaffModuleTest extends TestCase
         // Routing automatik tak berubah: tak pernah hasilkan kunci baharu
         $this->assertSame('frontend', (new DepartmentRouter)->route('tool_start', 'Edit', 'resources/js/app.vue'));
         $this->assertNull((new DepartmentRouter)->route('idle'));
+    }
+
+    public function test_outdoor_work_is_gone_and_new_keys_are_pinnable_while_the_old_one_is_rejected(): void
+    {
+        $this->assertNotContains('outdoor_work', DepartmentRouter::DEPARTMENTS);
+        foreach (['auditorium', 'pool'] as $dept) {
+            $this->assertContains($dept, DepartmentRouter::DEPARTMENTS);
+        }
+        foreach (FloorStaffModule::staff() as $s) {
+            $this->assertNotContains('outdoor_work', array_column($s['routine'], 0), $s['name']);
+        }
+
+        $agent = Agent::create(['vendor' => 'claude', 'session_id' => 'sess-1', 'label' => 'Claude Code', 'name' => 'Claude sess', 'department' => 'backend', 'status' => 'active']);
+        $this->actingAs($this->user('owner'));
+        $this->patchJson("/office/agents/{$agent->id}", ['department' => 'pool'])->assertOk()->assertJsonPath('agent.department', 'pool');
+        $this->patchJson("/office/agents/{$agent->id}", ['department' => 'auditorium'])->assertOk()->assertJsonPath('agent.department', 'auditorium');
+        $this->patchJson("/office/agents/{$agent->id}", ['department' => 'outdoor_work'])->assertStatus(422);
+    }
+
+    public function test_sales_sit_on_l2_visit_l1_client_meeting_and_auditorium_and_trainer_uses_glass_room_and_auditorium(): void
+    {
+        $staff = collect(FloorStaffModule::staff())->keyBy('sid');
+        foreach (['demo-amir', 'demo-liyana'] as $sid) {
+            $depts = array_column($staff[$sid]['routine'], 0);
+            $this->assertSame('sales', $depts[0]);
+            $this->assertContains('client', $depts);
+            $this->assertContains('meeting', $depts);
+        }
+        $this->assertContains('auditorium', array_column($staff['demo-amir']['routine'], 0));
+        $this->assertEqualsCanonicalizing(['training', 'auditorium'], array_unique(array_column($staff['demo-azlan']['routine'], 0)));
+        $this->assertContains('pool', array_column($staff['demo-meiling']['routine'], 0));
+        $this->assertContains('rooftop', array_column($staff['demo-rajesh']['routine'], 0));
+    }
+
+    // ---- acara demo: pelancaran produk + pool party ----
+
+    private function rotators(int $n = 6): array
+    {
+        $out = [];
+        for ($i = 0; $i < $n; $i++) {
+            $out[] = ['vendor' => 'claude', 'sid' => "demo-rot$i", 'auto' => "Rot $i", 'label' => 'Claude Code', 'name' => "Rot $i"];
+        }
+
+        return $out;
+    }
+
+    /** @return array<int, array{sid: string, event: string, tool: ?string, dept: ?string, at: float}> */
+    private function after(float $t): array
+    {
+        return array_values(array_filter($this->log, fn ($e) => $e['at'] >= $t));
+    }
+
+    private function logTools(array $tools, ?string $event = null): array
+    {
+        return array_values(array_filter($this->log, fn ($e) => in_array($e['tool'], $tools, true) && ($event === null || $e['event'] === $event)));
+    }
+
+    public function test_launch_event_runs_in_the_auditorium_and_everyone_returns_to_routine(): void
+    {
+        $m = $this->module(events: true);
+        $m->start();
+
+        $this->advance($m, 170);
+        $this->assertFalse($m->isLaunchActive(), 'belum ~3 min');
+        $this->assertEmpty($this->logTools(self::LAUNCH_TEXTS));
+
+        $this->advance($m, 20);
+        $this->assertTrue($m->isLaunchActive());
+
+        $presenter = $this->logTools(['Pelancaran produk baharu']);
+        $this->assertCount(1, $presenter);
+        $this->assertSame('demo-azlan', $presenter[0]['sid']);
+        $this->assertSame('tool_start', $presenter[0]['event']);
+        $this->assertSame('auditorium', $presenter[0]['dept']);
+        $this->assertSame(1180.0, $presenter[0]['at']);
+
+        $audience = $this->logTools(['Hadir pelancaran produk']);
+        $this->assertEqualsCanonicalizing(FloorStaffModule::LAUNCH_AUDIENCE, array_column($audience, 'sid'));
+        foreach ($audience as $e) {
+            $this->assertSame('tool_start', $e['event']);
+            $this->assertSame('auditorium', $e['dept']);
+            $this->assertSame($presenter[0]['at'], $e['at']);
+        }
+
+        // Semasa acara tiada peserta berpindah (tiada tool_start lain)
+        $attendees = array_merge(['demo-azlan'], FloorStaffModule::LAUNCH_AUDIENCE);
+        $this->advance($m, 70);
+        $moved = array_filter($this->after($presenter[0]['at'] + 1), fn ($e) => in_array($e['sid'], $attendees, true) && $e['event'] === 'tool_start');
+        $this->assertEmpty($moved);
+
+        // ~90s kemudian tamat: tool_end di auditorium (urutan: tool_start dahulu, tool_end kemudian)
+        $this->advance($m, 40);
+        $this->assertFalse($m->isLaunchActive());
+        $ends = $this->logTools(self::LAUNCH_TEXTS, 'tool_end');
+        $this->assertCount(8, $ends);
+        $endAt = $ends[0]['at'];
+        $this->assertGreaterThanOrEqual(80, $endAt - $presenter[0]['at']);
+        $this->assertLessThanOrEqual(100, $endAt - $presenter[0]['at']);
+        foreach ($ends as $e) {
+            $this->assertSame('auditorium', $e['dept']);
+        }
+
+        // Lepas itu sambung rutin masing-masing (hentian dalam rutin sendiri)
+        $this->advance($m, 30);
+        foreach ($attendees as $sid) {
+            $routine = collect(FloorStaffModule::staff())->firstWhere('sid', $sid)['routine'];
+            $back = array_values(array_filter($this->eventsOf($sid), fn ($e) => $e['at'] > $endAt && $e['event'] === 'tool_start'));
+            $this->assertNotEmpty($back, "$sid tak sambung rutin");
+            $this->assertContains($back[0]['tool'], array_column($routine, 3), "$sid kembali ke rutin");
+        }
+    }
+
+    public function test_launch_repeats_every_six_to_eight_minutes(): void
+    {
+        $m = $this->module(events: true);
+        $m->start();
+        $this->advance($m, 3600);
+
+        $starts = array_column($this->logTools(['Pelancaran produk baharu'], 'tool_start'), 'at');
+        $this->assertGreaterThanOrEqual(7, count($starts));
+        $this->assertSame(1180.0, $starts[0]);
+        for ($i = 1; $i < count($starts); $i++) {
+            $this->assertGreaterThanOrEqual(360, $starts[$i] - $starts[$i - 1]);
+            // 6-8 min; boleh tertunda sedikit kalau Cikgu Azlan kebetulan sedang pool party
+            $this->assertLessThanOrEqual(481 + 90, $starts[$i] - $starts[$i - 1]);
+        }
+    }
+
+    public function test_launch_and_party_are_speed_aware(): void
+    {
+        $m = $this->module(events: true, speed: 10.0, rotators: fn (): array => $this->rotators());
+        $m->start();
+        $this->advance($m, 17);
+        $this->assertEmpty($this->logTools(self::LAUNCH_TEXTS), '180s / 10 = 18s');
+        $this->advance($m, 3);
+        $this->assertNotEmpty($this->logTools(self::LAUNCH_TEXTS));
+        $this->advance($m, 12); // acara ~9s
+        $this->assertFalse($m->isLaunchActive());
+        $this->advance($m, 11); // parti pada ~30s
+        $this->assertNotEmpty($this->logTools(self::PARTY_TEXTS));
+    }
+
+    public function test_pool_party_has_six_to_eight_guests_at_pool_or_rooftop_then_everyone_returns(): void
+    {
+        $hook = [];
+        $rotators = $this->rotators(4);
+        $m = $this->module(
+            events: true,
+            rotators: fn (): array => $rotators,
+            rotHook: function (string $sid, bool $join) use (&$hook): void {
+                $hook[] = [$sid, $join];
+            },
+        );
+        $m->start();
+
+        $this->advance($m, 295);
+        $this->assertFalse($m->isPartyActive());
+        $this->assertEmpty($this->logTools(self::PARTY_TEXTS));
+        $this->advance($m, 10);
+        $this->assertTrue($m->isPartyActive());
+
+        $party = $this->logTools(self::PARTY_TEXTS);
+        $this->assertGreaterThanOrEqual(6, count($party));
+        $this->assertLessThanOrEqual(8, count($party));
+        $this->assertCount(count($party), array_unique(array_column($party, 'sid')), 'seorang sekali');
+        foreach ($party as $e) {
+            $this->assertSame('tool_start', $e['event']);
+            $this->assertSame($e['tool'] === 'Pool party!' ? 'pool' : 'rooftop', $e['dept']);
+        }
+        $rotSids = array_column($rotators, 'sid');
+        $rotGuests = array_values(array_filter(array_column($party, 'sid'), fn ($sid) => in_array($sid, $rotSids, true)));
+        $this->assertEqualsCanonicalizing($rotGuests, array_column(array_filter($hook, fn ($h) => $h[1]), 0), 'hook join untuk rotator tetamu');
+        $partyStart = $party[0]['at'];
+
+        $this->advance($m, 100);
+        $this->assertFalse($m->isPartyActive());
+        $ends = $this->logTools(self::PARTY_TEXTS, 'tool_end');
+        $this->assertCount(count($party), $ends);
+        $endAt = $ends[0]['at'];
+        $this->assertGreaterThanOrEqual(65, $endAt - $partyStart);
+        $this->assertLessThanOrEqual(85, $endAt - $partyStart);
+        $this->assertEqualsCanonicalizing($rotGuests, array_column(array_filter($hook, fn ($h) => ! $h[1]), 0), 'rotator dilepas semula');
+
+        // Staff aras sambung rutin masing-masing
+        $this->advance($m, 20);
+        $floorGuests = array_values(array_diff(array_column($party, 'sid'), $rotSids));
+        $this->assertNotEmpty($floorGuests);
+        foreach ($floorGuests as $sid) {
+            $routine = collect(FloorStaffModule::staff())->firstWhere('sid', $sid)['routine'];
+            $back = array_values(array_filter($this->eventsOf($sid), fn ($e) => $e['at'] > $endAt && $e['event'] === 'tool_start'));
+            $this->assertNotEmpty($back, "$sid tak sambung");
+            $this->assertContains($back[0]['tool'], array_column($routine, 3));
+        }
+    }
+
+    public function test_pool_party_repeats_every_ten_to_twelve_minutes(): void
+    {
+        $m = $this->module(events: true, rotators: fn (): array => $this->rotators());
+        $m->start();
+        $this->advance($m, 4000);
+
+        $starts = [];
+        foreach ($this->logTools(self::PARTY_TEXTS, 'tool_start') as $e) {
+            $starts[(string) $e['at']] = $e['at'];
+        }
+        $starts = array_values($starts);
+        $this->assertGreaterThanOrEqual(5, count($starts));
+        $this->assertSame(1300.0, $starts[0]);
+        for ($i = 1; $i < count($starts); $i++) {
+            $this->assertGreaterThanOrEqual(600, $starts[$i] - $starts[$i - 1]);
+            $this->assertLessThanOrEqual(721, $starts[$i] - $starts[$i - 1]);
+        }
+    }
+
+    public function test_pool_party_never_invites_anyone_in_the_pantry_gate_and_launch_frees_their_slot(): void
+    {
+        $partyChecked = 0;
+        $launchChecked = 0;
+
+        foreach (range(1, 40) as $seed) {
+            $this->seed = $seed;
+            $this->log = [];
+            $this->pantry = [];
+            $this->t = 1000.0;
+            $m = $this->module(events: true);
+            $m->start();
+
+            $partySeen = false;
+            $launchSeen = false;
+            for ($i = 0; $i < 400 && ! ($partySeen && $launchSeen); $i++) {
+                $inPantry = array_keys($this->pantry);
+                $this->t += 1.0;
+                $m->tick();
+
+                if (! $launchSeen && $m->isLaunchActive()) {
+                    $launchSeen = true;
+                    $freed = array_intersect($inPantry, FloorStaffModule::LAUNCH_AUDIENCE, ['demo-amir', 'demo-liyana', 'demo-azlan']);
+                    $this->assertEmpty(array_intersect(array_keys($this->pantry), FloorStaffModule::LAUNCH_AUDIENCE), 'penonton tak pegang slot pantri');
+                    $launchChecked += count($freed) > 0 ? 1 : 0;
+                }
+                if (! $partySeen && $m->isPartyActive()) {
+                    $partySeen = true;
+                    $guests = array_column($this->logTools(self::PARTY_TEXTS, 'tool_start'), 'sid');
+                    $this->assertEmpty(array_intersect($guests, $inPantry), "seed $seed: tetamu parti dari pantri");
+                    $partyChecked += count($inPantry) > 0 ? 1 : 0;
+                }
+            }
+            $this->assertTrue($partySeen && $launchSeen);
+            $this->assertLessThanOrEqual(2, count($this->pantry));
+        }
+
+        $this->assertGreaterThan(0, $partyChecked, 'tiada senario pantri semasa parti diuji');
+        $this->assertGreaterThan(0, $launchChecked, 'tiada senario pantri semasa launch diuji');
+    }
+
+    public function test_events_never_run_while_held_and_hold_cancels_a_running_event(): void
+    {
+        $hook = [];
+        $rotators = $this->rotators();
+        $m = $this->module(events: true, rotators: fn (): array => $rotators, rotHook: function (string $sid, bool $join) use (&$hook): void {
+            $hook[] = [$sid, $join];
+        });
+        $m->start();
+        $this->advance($m, 305); // parti sedang jalan, launch dah tamat
+        $this->assertTrue($m->isPartyActive());
+        $joined = count(array_filter($hook, fn ($h) => $h[1]));
+
+        $m->hold();
+        $this->assertFalse($m->isPartyActive());
+        $this->assertFalse($m->isLaunchActive());
+        $this->assertCount($joined, array_filter($hook, fn ($h) => ! $h[1]), 'rotator parti dilepas bila briefing');
+
+        // Semasa briefing (jauh lewat jadual): senyap, tiada acara
+        $before = count($this->log);
+        $this->advance($m, 1500);
+        $this->assertSame($before, count($this->log));
+
+        // Resume: acara tertunggak ditunda, tak serentak dengan resume
+        $resumeAt = $this->t;
+        $m->resume();
+        $this->advance($m, 20);
+        $this->assertEmpty(array_filter($this->after($resumeAt), fn ($e) => in_array($e['tool'], array_merge(self::LAUNCH_TEXTS, self::PARTY_TEXTS), true)));
+        $this->advance($m, 60);
+        $this->assertNotEmpty(array_filter($this->after($resumeAt), fn ($e) => $e['tool'] === 'Pelancaran produk baharu'));
+    }
+
+    public function test_events_can_be_disabled(): void
+    {
+        $m = $this->module(events: false, rotators: fn (): array => $this->rotators());
+        $m->start();
+        $this->advance($m, 2500);
+
+        $this->assertEmpty($this->logTools(array_merge(self::LAUNCH_TEXTS, self::PARTY_TEXTS)));
+        $this->assertFalse($m->isLaunchActive());
+        $this->assertFalse($m->isPartyActive());
+    }
+
+    public function test_demo_command_no_events_flag_keeps_floors_but_skips_the_events(): void
+    {
+        $this->artisan('office:demo', ['--once' => true, '--speed' => 400, '--hours' => 1, '--no-reception' => true, '--no-events' => true])->assertSuccessful();
+
+        $this->assertSame(25, Agent::count());
+        $this->assertSame(0, AgentEvent::whereIn('tool', array_merge(self::LAUNCH_TEXTS, self::PARTY_TEXTS))->count());
+        $this->assertGreaterThan(0, AgentEvent::where('event', 'tool_start')->whereIn('department', ['ceo', 'sales'])->count());
+    }
+
+    public function test_demo_command_runs_both_events_end_to_end(): void
+    {
+        // Satu kitaran penuh ~412s masa demo (> 300s): pelancaran (3 min) dan pool party (5 min) sempat berlaku
+        $this->artisan('office:demo', ['--once' => true, '--speed' => 800, '--hours' => 1, '--no-reception' => true])->assertSuccessful();
+
+        $this->assertGreaterThan(0, AgentEvent::where('tool', 'Pelancaran produk baharu')->where('department', 'auditorium')->count());
+        $this->assertGreaterThan(0, AgentEvent::where('tool', 'Hadir pelancaran produk')->where('department', 'auditorium')->count());
+        $this->assertGreaterThan(0, AgentEvent::whereIn('tool', self::PARTY_TEXTS)->whereIn('department', ['pool', 'rooftop'])->count());
+        $this->assertSame(0, AgentEvent::where('event', 'session_end')->count());
+    }
+
+    public function test_no_floors_flag_also_disables_the_events(): void
+    {
+        $this->artisan('office:demo', ['--once' => true, '--speed' => 400, '--hours' => 1, '--no-reception' => true, '--no-floors' => true])->assertSuccessful();
+
+        $this->assertSame(0, AgentEvent::whereIn('tool', array_merge(self::LAUNCH_TEXTS, self::PARTY_TEXTS))->count());
+    }
+
+    public function test_rotators_chill_in_the_new_rooms(): void
+    {
+        $this->assertSame(['playroom', 'gaming', 'pool', 'rooftop', 'outdoor_chill'], \App\Console\Commands\OfficeDemo::CHILL_ROOMS);
+        foreach (\App\Console\Commands\OfficeDemo::CHILL_ROOMS as $room) {
+            $this->assertContains($room, DepartmentRouter::DEPARTMENTS);
+        }
     }
 
     public function test_exec_avatars_are_accepted_by_patch(): void

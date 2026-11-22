@@ -348,9 +348,14 @@ class ReceptionModuleTest extends TestCase
 
     public function test_receptionist_round_spans_the_whole_building_and_recipients_include_floor_staff(): void
     {
-        foreach (['training', 'sales', 'client', 'marketing', 'head_office', 'ceo', 'cfo', 'md', 'hod', 'gaming', 'outdoor_work', 'rooftop'] as $dept) {
+        foreach (['training', 'sales', 'client', 'marketing', 'head_office', 'ceo', 'cfo', 'md', 'hod', 'gaming', 'auditorium', 'pool', 'rooftop', 'boardroom', 'playroom'] as $dept) {
             $this->assertArrayHasKey($dept, ReceptionModule::PLACES);
         }
+        $this->assertArrayNotHasKey('outdoor_work', ReceptionModule::PLACES);
+        $this->assertSame(
+            ['training', 'client', 'meeting', 'auditorium', 'pantry', 'sales', 'marketing', 'kanban', 'head_office', 'frontend', 'backend', 'qa', 'research', 'deploy', 'ops', 'coffee', 'boardroom', 'ceo', 'cfo', 'md', 'hod', 'playroom', 'gaming', 'pool', 'rooftop'],
+            array_keys(ReceptionModule::PLACES),
+        );
         foreach (array_merge(array_keys(ReceptionModule::PLACES), ReceptionModule::RECIPIENTS) as $dept) {
             $this->assertContains($dept, DepartmentRouter::DEPARTMENTS);
         }

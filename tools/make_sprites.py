@@ -3140,6 +3140,633 @@ def make_multifloor_preview(folder, assets, base):
     scene.resize((W * 2, Hh * 2), Image.NEAREST).save(folder / 'preview_multifloor_scene.png')
 
 
+# ---------------------------------------------------------------- rooftop: kolam, taman, parti; auditorium
+# Sprite tambahan untuk dek kolam, taman, ruang parti dan auditorium. Gaya dan pembantu sama seperti di atas.
+
+STONE = dict(top=(206, 200, 188, 255), left=(170, 164, 152, 255), right=(138, 132, 122, 255), hi=(232, 228, 218, 255))
+CHROME = (222, 230, 240, 255)
+CHROME_D = (150, 160, 178, 255)
+NAVY = (28, 36, 82, 255)
+
+
+def cyl(d, cx, cy, rx, ry, h, top, side, ol=OL):
+    """Silinder: elips tapak berpusat (cx, cy), tinggi h, atas elips lebih cerah."""
+    d.ellipse([cx - rx, cy - ry, cx + rx, cy + ry], fill=side, outline=ol)
+    d.rectangle([cx - rx, cy - h, cx + rx, cy], fill=side)
+    d.line([(cx - rx, cy - h), (cx - rx, cy)], fill=ol)
+    d.line([(cx + rx, cy - h), (cx + rx, cy)], fill=ol)
+    d.ellipse([cx - rx, cy - h - ry, cx + rx, cy - h + ry], fill=top, outline=ol)
+
+
+def star_pts(cx, cy, ro, ri, rot=-90):
+    out = []
+    for i in range(10):
+        a = math.radians(rot + i * 36)
+        r = ro if i % 2 == 0 else ri
+        out.append((cx + r * math.cos(a), cy + r * math.sin(a)))
+    return out
+
+
+def rocket_img(scale=1, angle=-40):
+    """Roket Google-colour: badan putih, hidung/sirip merah, tingkap biru, api kuning. Dipusing ke kanan atas."""
+    lay, d = new(10, 25)
+    d.polygon([(2, 8), (4, 1), (5, 1), (7, 8)], fill=G_RED)
+    d.rectangle([2, 8, 7, 18], fill=(248, 248, 250, 255))
+    d.line([(7, 8), (7, 18)], fill=(200, 204, 214, 255))
+    d.rectangle([3, 10, 6, 13], fill=G_BLUE)
+    d.point((3, 10), fill=(190, 220, 255, 255))
+    d.polygon([(2, 14), (0, 20), (2, 18)], fill=G_RED)
+    d.polygon([(7, 14), (9, 20), (7, 18)], fill=G_RED)
+    d.rectangle([3, 19, 6, 19], fill=(150, 156, 170, 255))
+    d.polygon([(3, 20), (6, 20), (4, 24), (5, 24)], fill=G_YELLOW)
+    d.polygon([(4, 20), (5, 20), (4, 22)], fill=(255, 150, 40, 255))
+    outline_alpha(lay)
+    if scale != 1:
+        lay = lay.resize((round(lay.width * scale), round(lay.height * scale)), Image.NEAREST)
+    return lay.rotate(angle, expand=True, resample=Image.NEAREST)
+
+
+def text_size(text, size):
+    from PIL import ImageFont
+    return ImageFont.load_default(size=size).getbbox(text)
+
+
+# ---- kolam: jubin air ------------------------------------------------------------------------------
+def water_tile(variant):
+    """Air kolam turquoise dengan riak terang lembut; tepi nipis lebih gelap (sama bentuk deck_a)."""
+    base = (64, 204, 224) if variant == 'a' else (56, 194, 218)
+    rnd = random.Random(61 if variant == 'a' else 62)
+    light, soft, dark = set(), set(), set()
+    for _ in range(11):
+        x, y = rnd.randint(8, 46), rnd.randint(5, 22)
+        n = rnd.randint(3, 6)
+        for i in range(n):
+            light.add((x + i, y))
+        for i in range(1, n - 1):
+            soft.add((x - 1 + i, y + 1))
+        for i in range(n):
+            dark.add((x + 2 + i, y + 3))
+    sparkle = {(rnd.randint(8, 46), rnd.randint(5, 22)) for _ in range(5)}
+
+    def fn(u, v, x, y):
+        w = math.sin((u + v) * 8.0 + (0 if variant == 'a' else 1.7)) + math.sin((u - v) * 6.0 + 0.8)
+        col = tint_add(base, int(w * 3.2) + int((0.5 - abs(u - 0.5) - abs(v - 0.5)) * 8))
+        if (x, y) in dark and (x, y) not in light:
+            col = tint_add(col, -12)
+        if (x, y) in soft:
+            col = tint_add(col, 10)
+        if (x, y) in light:
+            col = tint_add(col, 26)
+        if (x, y) in sparkle:
+            col = (232, 250, 255, 255)
+        return col
+    return pattern_tile(fn, edge=tint_add(base, -11))
+
+
+def pool_ladder():
+    """Tangga kolam krom: dua rel melengkung di tepi dek, anak tangga turun ke air (riak di kaki)."""
+    H = 60
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    ring, rd = new(56, H)
+    q = p(0.5, 0.74, 0)
+    rd.ellipse([q[0] - 14, q[1] - 5, q[0] + 14, q[1] + 5], outline=(214, 248, 255, 190))
+    rd.ellipse([q[0] - 8, q[1] - 3, q[0] + 8, q[1] + 3], outline=(214, 248, 255, 140))
+    img.alpha_composite(ring)
+    for u in (0.3, 0.7):
+        flange = [p(u - 0.09, 0.08, 0), p(u + 0.09, 0.08, 0), p(u + 0.09, 0.2, 0), p(u - 0.09, 0.2, 0)]
+        d.polygon(flange, fill=CHROME_D, outline=OL)
+    rails = {}
+    for u in (0.3, 0.7):
+        rails[u] = [p(u, 0.14, 1), p(u, 0.14, 27), p(u, 0.26, 34), p(u, 0.46, 32), p(u, 0.74, 3)]
+    for u in (0.3, 0.7):
+        d.line(rails[u], fill=OL, width=4)
+    for z in (9, 16, 23):  # anak tangga antara dua rel (di bahagian turun)
+        t = (32 - z) / 29
+        v = 0.46 + (0.74 - 0.46) * t
+        d.line([p(0.3, v, z), p(0.7, v, z)], fill=OL, width=3)
+        d.line([p(0.3, v, z), p(0.7, v, z)], fill=CHROME_D, width=1)
+    for u in (0.3, 0.7):
+        d.line(rails[u], fill=CHROME, width=2)
+        d.line([(x - 1, y - 1) for x, y in rails[u][1:4]], fill=(255, 255, 255, 255), width=1)
+    d.point(p(0.7, 0.74, 3), fill=(190, 240, 250, 255))
+    return img
+
+
+def diving_board():
+    """Papan lompat: tapak putih/biru dan papan fleksibel bertekstur menjulur ke arah +c."""
+    H = 56
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    ibox(d, H, 0.0, 0.34, 0.3, 0.7, 0, 13, (240, 244, 248, 255), (222, 228, 238, 255), (176, 186, 202, 255), (255, 255, 255, 255))
+    a = p(0.17, 0.7, 7)
+    d.rectangle([a[0] - 3, a[1], a[0] + 3, a[1] + 2], fill=G_BLUE)
+    z0, z1 = 13, 16
+    ibox(d, H, 0.12, 1.02, 0.38, 0.62, z0, z1, (252, 252, 252, 255), (210, 224, 244, 255), (150, 178, 222, 255), (255, 255, 255, 255))
+    for k in range(5):  # jalur tekstur biru pada papan
+        u = 0.34 + k * 0.14
+        d.line([p(u, 0.4, z1), p(u, 0.6, z1)], fill=G_BLUE)
+    for v in (0.34, 0.66):  # susur pendek di pangkal papan
+        d.line([p(0.06, v, 13), p(0.06, v, 24)], fill=OL, width=3)
+        d.line([p(0.06, v, 13), p(0.06, v, 24)], fill=CHROME, width=1)
+    d.line([p(0.06, 0.34, 24), p(0.06, 0.66, 24)], fill=OL, width=3)
+    d.line([p(0.06, 0.34, 24), p(0.06, 0.66, 24)], fill=CHROME, width=1)
+    return img
+
+
+def garden_tree():
+    """Pokok rendang dalam tapak penanam batu bulat bertanah mulsa."""
+    H = 96
+    img, d = new(56, H)
+    cx, cy = 28, H - 14
+    cyl(d, cx, cy, 25, 12, 8, STONE['top'], STONE['left'])
+    d.arc([cx - 25, cy - 12, cx + 25, cy + 12], 20, 160, fill=STONE['right'])
+    d.line([(cx - 24, cy - 3), (cx - 3, cy + 7)], fill=STONE['hi'])
+    soil = (98, 64, 42, 255)
+    d.ellipse([cx - 21, cy - 17, cx + 21, cy + 1], fill=soil, outline=(60, 40, 26, 255))
+    rnd = random.Random(71)
+    for _ in range(40):
+        x, y = rnd.randint(cx - 18, cx + 18), rnd.randint(cy - 14, cy)
+        if img.getpixel((x, y)) == soil:
+            d.point((x, y), fill=(128, 88, 58, 255) if rnd.random() < 0.5 else (70, 46, 30, 255))
+    bark = (118, 80, 52, 255)
+    d.polygon([(24, cy - 6), (32, cy - 6), (31, cy - 36), (26, cy - 36)], fill=bark, outline=OL)
+    d.line([(28, cy - 8), (28, cy - 34)], fill=(146, 104, 72, 255))
+    d.line([(27, cy - 30), (16, cy - 44)], fill=OL, width=3)
+    d.line([(29, cy - 30), (41, cy - 44)], fill=OL, width=3)
+    d.line([(27, cy - 30), (16, cy - 44)], fill=bark, width=1)
+    d.line([(29, cy - 30), (41, cy - 44)], fill=bark, width=1)
+    fol, fd = new(56, H)
+    dark, mid, light = (46, 110, 52, 255), (76, 150, 66, 255), (128, 192, 96, 255)
+    blobs = ((28, 34, 17), (13, 42, 12), (43, 42, 12), (18, 24, 12), (38, 23, 12), (28, 14, 12), (8, 30, 7), (49, 30, 7))
+    for (x, y, r) in blobs:
+        fd.ellipse([x - r, y - r, x + r, y + r], fill=mid)
+    for (x, y, r) in blobs:
+        fd.pieslice([x - r, y - r, x + r, y + r], 20, 160, fill=dark)
+    for (x, y, r) in blobs:
+        fd.ellipse([x - r + 3, y - r + 2, x + r - 4, y + r - 7], fill=mid)
+        fd.ellipse([x - r + 4, y - r + 3, x + 1, y - 1], fill=light)
+    for _ in range(80):
+        x, y = rnd.randint(4, 52), rnd.randint(2, 56)
+        if fol.getpixel((x, y))[3]:
+            fd.rectangle([x, y, x + 1, y], fill=light if rnd.random() < 0.55 else dark)
+    for (x, y) in ((14, 34), (30, 18), (40, 36), (22, 44), (34, 28)):  # bunga/buah kecil
+        if fol.getpixel((x, y))[3]:
+            fd.rectangle([x, y, x + 1, y + 1], fill=(250, 232, 242, 255) if (x + y) % 2 else G_YELLOW)
+    outline_alpha(fol, (30, 70, 38, 255))
+    img.alpha_composite(fol)
+    return img
+
+
+def flower_bed():
+    """Batas bunga batu tinggi: tanah gelap, daun hijau, bunga warna Google, merah jambu dan putih."""
+    H = 40
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    ibox(d, H, 0.04, 0.96, 0.04, 0.96, 0, 10, STONE['top'], STONE['left'], STONE['right'], STONE['hi'])
+    d.line([p(0.05, 0.96, 5), p(0.95, 0.96, 5)], fill=shade(STONE['left'], 0.8))
+    d.line([p(0.96, 0.95, 5), p(0.96, 0.05, 5)], fill=shade(STONE['right'], 0.8))
+    for u in (0.3, 0.55, 0.8):
+        d.line([p(u, 0.96, 0), p(u, 0.96, 4)], fill=shade(STONE['left'], 0.8))
+        d.line([p(u - 0.12, 0.96, 5), p(u - 0.12, 0.96, 10)], fill=shade(STONE['left'], 0.8))
+    for v in (0.2, 0.45, 0.7):
+        d.line([p(0.96, v, 0), p(0.96, v, 4)], fill=shade(STONE['right'], 0.8))
+        d.line([p(0.96, v + 0.12, 5), p(0.96, v + 0.12, 10)], fill=shade(STONE['right'], 0.8))
+    d.polygon([p(0.12, 0.12, 10), p(0.88, 0.12, 10), p(0.88, 0.88, 10), p(0.12, 0.88, 10)], fill=(92, 62, 42, 255), outline=OL)
+    fol, fd = new(56, H)
+    rnd = random.Random(77)
+    green, lgreen = (64, 138, 62, 255), (112, 178, 88, 255)
+    spots = []
+    for _ in range(22):
+        u, v = rnd.uniform(0.2, 0.8), rnd.uniform(0.2, 0.8)
+        x, y = p(u, v, 10)
+        spots.append((x, y, u + v))
+    spots.sort(key=lambda s: s[2])
+    cols = [G_RED, G_YELLOW, (255, 255, 255, 255), (244, 143, 177, 255), G_BLUE, (186, 104, 200, 255), G_RED, G_YELLOW]
+    for (x, y, _) in spots:
+        h = rnd.randint(3, 8)
+        fd.ellipse([x - 3, y - 4, x + 3, y], fill=green)
+        fd.line([(x, y - 2), (x, y - h)], fill=lgreen)
+    outline_alpha(fol, (30, 70, 38, 255))
+    img.alpha_composite(fol)
+    for i, (x, y, _) in enumerate(spots):
+        h = 3 + (i * 5) % 6
+        col = cols[i % len(cols)]
+        bx, by = x, y - h - 2
+        d.rectangle([bx - 1, by - 1, bx + 1, by + 1], fill=col, outline=OL)
+        d.point((bx, by), fill=(255, 238, 160, 255) if col != G_YELLOW else (255, 255, 255, 255))
+    return img
+
+
+def fountain():
+    """Air pancut taman batu: kolam bulat, tiang tengah, mangkuk atas, air memancut dan menitis."""
+    H = 64
+    img, d = new(56, H)
+    cx, cy = 28, H - 14
+    cyl(d, cx, cy, 26, 13, 10, (118, 214, 232, 255), STONE['left'])
+    d.arc([cx - 26, cy - 13, cx + 26, cy + 13], 20, 160, fill=STONE['right'])
+    d.ellipse([cx - 22, cy - 20, cx + 22, cy - 1], fill=(88, 202, 224, 255), outline=(60, 150, 176, 255))
+    d.ellipse([cx - 16, cy - 17, cx + 16, cy - 5], outline=(168, 236, 248, 255))
+    d.line([(cx - 25, cy - 4), (cx - 4, cy + 6)], fill=STONE['hi'])
+    d.rectangle([cx - 3, cy - 30, cx + 3, cy - 10], fill=STONE['left'], outline=OL)
+    d.line([(cx - 1, cy - 29), (cx - 1, cy - 11)], fill=STONE['hi'])
+    d.ellipse([cx - 4, cy - 14, cx + 4, cy - 8], fill=STONE['top'], outline=OL)
+    cyl(d, cx, cy - 30, 12, 6, 4, (118, 214, 232, 255), STONE['left'])
+    d.ellipse([cx - 9, cy - 36, cx + 9, cy - 30], fill=(88, 202, 224, 255))
+    wat = (186, 240, 252, 255)
+    d.line([(cx, cy - 34), (cx, cy - 46)], fill=wat, width=2)
+    d.line([(cx, cy - 46), (cx - 6, cy - 40), (cx - 10, cy - 32)], fill=wat)
+    d.line([(cx, cy - 46), (cx + 6, cy - 40), (cx + 10, cy - 32)], fill=wat)
+    d.point((cx, cy - 48), fill=(255, 255, 255, 255))
+    for x in (cx - 10, cx - 6, cx - 2, cx + 3, cx + 7, cx + 11):
+        d.line([(x, cy - 28), (x, cy - 19)], fill=(150, 226, 244, 255))
+    for x, y in ((cx - 12, cy - 17), (cx + 1, cy - 16), (cx + 12, cy - 18), (cx - 5, cy - 14), (cx + 6, cy - 13)):
+        d.point((x, y), fill=(236, 252, 255, 255))
+    return img
+
+
+# ---- parti ------------------------------------------------------------------------------------------
+def dj_booth():
+    """Booth DJ: meja gelap dengan dua turntable dan mixer, speaker dengan LED warna Google, panel EQ di belakang."""
+    H = 76
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    blk = dict(top=(52, 54, 68, 255), left=(36, 38, 50, 255), right=(26, 28, 38, 255), hi=(96, 100, 122, 255))
+    d.polygon([p(0.05, 0.06, 20), p(0.95, 0.06, 20), p(0.95, 0.06, 46), p(0.05, 0.06, 46)], fill=(16, 18, 34, 255), outline=OL)
+    bars = [(G_BLUE, 8), (G_RED, 14), (G_YELLOW, 10), (G_GREEN, 18), (G_BLUE, 12), (G_RED, 16), (G_YELLOW, 9), (G_GREEN, 13)]
+    for i, (col, h) in enumerate(bars):
+        u = 0.12 + i * 0.105
+        d.line([p(u, 0.06, 23), p(u, 0.06, 23 + h)], fill=col, width=2)
+    for (u0, u1, v0, v1, face) in ((0.0, 0.36, 0.64, 1.0, 'L'), (0.64, 1.0, 0.0, 0.36, 'R')):
+        ibox(d, H, u0, u1, v0, v1, 0, 38, blk['top'], blk['left'], blk['right'], blk['hi'])
+        fl, fd = new(11, 24)
+        fd.ellipse([0, 8, 10, 18], fill=(24, 26, 34, 255), outline=(110, 114, 132, 255))
+        fd.ellipse([3, 11, 7, 15], fill=(70, 74, 92, 255))
+        fd.ellipse([3, 0, 7, 4], fill=(24, 26, 34, 255), outline=(110, 114, 132, 255))
+        for i, col in enumerate((G_BLUE, G_RED, G_YELLOW, G_GREEN)):
+            fd.point((1 + i * 2, 21), fill=col)
+        if face == 'L':
+            x0, y0 = p(0.05, 1.0, 36)
+            paste_L(img, fl, x0, y0)
+        else:
+            x0, y0 = p(1.0, 0.36, 36)
+            paste_R(img, fl, x0, y0)
+    ibox(d, H, 0.24, 0.76, 0.3, 0.7, 0, 18, blk['top'], blk['left'], blk['right'], blk['hi'])
+    d.line([p(0.26, 0.7, 14), p(0.74, 0.7, 14)], fill=G_BLUE)
+    d.line([p(0.76, 0.68, 14), p(0.76, 0.32, 14)], fill=G_RED)
+    d.line([p(0.26, 0.7, 6), p(0.74, 0.7, 6)], fill=shade(G_YELLOW, 0.9))
+    for (u, v) in ((0.36, 0.6), (0.64, 0.4)):
+        x, y = p(u, v, 18)
+        d.ellipse([x - 6, y - 3, x + 6, y + 3], fill=(150, 154, 168, 255), outline=OL)
+        d.ellipse([x - 5, y - 3, x + 4, y + 2], fill=(18, 18, 24, 255))
+        d.ellipse([x - 3, y - 2, x + 2, y + 1], fill=G_RED)
+        d.point((x, y - 1), fill=(255, 255, 255, 255))
+        d.line([(x + 6, y - 3), (x + 2, y)], fill=(210, 214, 224, 255))
+    x, y = p(0.5, 0.5, 18)
+    d.rectangle([x - 3, y - 4, x + 3, y], fill=(38, 40, 52, 255), outline=OL)
+    for i, col in enumerate((G_GREEN, G_YELLOW, G_RED)):
+        d.point((x - 2 + i * 2, y - 3), fill=col)
+    d.arc([x + 9, y - 9, x + 17, y - 1], 180, 360, fill=OL)
+    d.rectangle([x + 8, y - 4, x + 9, y - 2], fill=G_BLUE)
+    d.rectangle([x + 16, y - 4, x + 17, y - 2], fill=G_BLUE)
+    return img
+
+
+def bar_counter():
+    """Kaunter bar parti: kayu gelap, jalur LED, botol dan paip draf, dua bangku berkusyen warna Google."""
+    H = 64
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    ibox(d, H, 0.0, 1.0, 0.08, 0.34, 0, 20, WALNUT['top'], WALNUT['left'], WALNUT['right'], WALNUT['hi'])
+    d.line([p(0.04, 0.34, 4), p(0.96, 0.34, 4)], fill=GOLD)
+    d.line([p(1.0, 0.32, 4), p(1.0, 0.1, 4)], fill=shade(GOLD, 0.75))
+    for (u, col, h) in ((0.12, G_GREEN, 9), (0.24, G_RED, 11), (0.36, (150, 100, 50, 255), 8), (0.8, G_YELLOW, 10), (0.92, G_BLUE, 8)):
+        x, y = p(u, 0.22, 20)
+        d.rectangle([x - 2, y - h + 3, x + 1, y], fill=shade(col, 0.9), outline=OL)
+        d.rectangle([x - 1, y - h - 2, x, y - h + 3], fill=shade(col, 0.9), outline=OL)
+        d.point((x - 1, y - h - 3), fill=(220, 224, 232, 255))
+        d.line([(x - 1, y - h + 5), (x - 1, y - 2)], fill=shade(col, 1.4))
+    x, y = p(0.55, 0.22, 20)
+    d.rectangle([x - 1, y - 8, x + 1, y], fill=CHROME, outline=OL)
+    d.line([(x - 1, y - 9), (x + 6, y - 9)], fill=OL, width=3)
+    d.line([(x - 1, y - 9), (x + 6, y - 9)], fill=CHROME, width=1)
+    d.rectangle([x + 5, y - 7, x + 6, y - 5], fill=(190, 196, 208, 255), outline=OL)
+    x -= 0
+    d.rectangle([x + 4, y - 14, x + 7, y - 9], fill=G_RED, outline=OL)
+    ibox(d, H, 0.0, 1.0, 0.42, 0.74, 0, 22, (60, 40, 30, 255), (92, 60, 42, 255), (66, 42, 30, 255), (150, 112, 82, 255))
+    d.line([p(0.02, 0.74, 20), p(0.98, 0.74, 20)], fill=GOLD)
+    d.line([p(1.0, 0.72, 20), p(1.0, 0.44, 20)], fill=shade(GOLD, 0.8))
+    seg = [G_BLUE, G_RED, G_YELLOW, G_GREEN]
+    for i, col in enumerate(seg):
+        u0, u1 = 0.04 + i * 0.235, 0.04 + (i + 1) * 0.235 - 0.02
+        d.line([p(u0, 0.74, 5), p(u1, 0.74, 5)], fill=col, width=2)
+    d.line([p(1.0, 0.7, 5), p(1.0, 0.46, 5)], fill=G_BLUE, width=2)
+    for u in (0.25, 0.5, 0.75):
+        d.line([p(u, 0.74, 9), p(u, 0.74, 17)], fill=(70, 46, 32, 255))
+    for (u, v, col) in ((0.4, 0.58, (255, 255, 255, 200)), (0.7, 0.62, (250, 196, 190, 220))):
+        x, y = p(u, v, 22)
+        d.rectangle([x - 2, y - 4, x + 1, y], fill=col, outline=OL)
+    for u, col in ((0.26, G_RED), (0.72, G_YELLOW)):
+        x, y = p(u, 0.98, 0)
+        d.line([(x, y - 11), (x, y - 1)], fill=CHROME_D, width=2)
+        d.ellipse([x - 5, y - 2, x + 5, y + 1], fill=CHROME_D, outline=OL)
+        d.ellipse([x - 6, y - 15, x + 6, y - 9], fill=shade(col, 0.7), outline=OL)
+        d.ellipse([x - 6, y - 17, x + 6, y - 11], fill=col, outline=OL)
+        d.arc([x - 4, y - 16, x + 3, y - 13], 200, 290, fill=shade(col, 1.3))
+    return img
+
+
+def balloons():
+    """Sekumpulan belon warna Google diikat pada pemberat emas."""
+    H = 80
+    img, d = new(56, H)
+    wx, wy = 28, H - 16
+    cluster = [(14, 34, G_GREEN), (42, 34, G_YELLOW), (28, 29, G_RED), (19, 20, G_BLUE), (37, 20, G_RED), (28, 10, G_BLUE)]
+    for (x, y, col) in cluster:
+        d.line([(x, y + 11), (wx, wy - 5)], fill=(210, 214, 222, 255))
+    for (x, y, col) in sorted(cluster, key=lambda t: -t[1]):
+        layer, ld = new(56, H)
+        ld.ellipse([x - 7, y - 9, x + 7, y + 9], fill=col)
+        ld.polygon([(x - 2, y + 9), (x + 2, y + 9), (x, y + 12)], fill=shade(col, 0.78))
+        ld.chord([x - 6, y - 5, x + 6, y + 9], 20, 160, fill=shade(col, 0.88))
+        ld.ellipse([x - 4, y - 7, x - 2, y - 4], fill=shade(col, 1.45))
+        ld.point((x - 3, y - 3), fill=(255, 255, 255, 255))
+        outline_alpha(layer)
+        img.alpha_composite(layer)
+    ibox(d, H, 0.34, 0.66, 0.34, 0.66, 0, 7, (232, 194, 90, 255), (214, 172, 72, 255), (170, 130, 50, 255), (252, 226, 150, 255))
+    d.line([isop(H, 0.34, 0.66, 3), isop(H, 0.66, 0.66, 3)], fill=G_RED)
+    d.line([isop(H, 0.66, 0.66, 3), isop(H, 0.66, 0.34, 3)], fill=shade(G_RED, 0.8))
+    return img
+
+
+def party_table():
+    """Meja koktel tinggi: bulat, kaki langsing, snek dan minuman berwarna."""
+    H = 56
+    img, d = new(56, H)
+    cx, cy = 28, H - 14
+    d.ellipse([cx - 9, cy - 4, cx + 9, cy + 4], fill=(150, 156, 170, 255), outline=OL)
+    d.ellipse([cx - 6, cy - 4, cx + 6, cy + 1], fill=(196, 202, 214, 255))
+    d.rectangle([cx - 1, cy - 33, cx + 1, cy - 2], fill=(170, 176, 190, 255), outline=OL)
+    d.line([(cx - 1, cy - 31), (cx - 1, cy - 4)], fill=(236, 240, 248, 255))
+    ty = cy - 34
+    d.ellipse([cx - 16, ty - 5, cx + 16, ty + 11], fill=(116, 66, 160, 255), outline=OL)
+    d.ellipse([cx - 16, ty - 8, cx + 16, ty + 6], fill=(250, 248, 244, 255), outline=OL)
+    d.arc([cx - 13, ty - 6, cx + 12, ty + 4], 195, 290, fill=(255, 255, 255, 255))
+    d.ellipse([cx - 11, ty - 3, cx - 3, ty + 2], fill=(230, 232, 238, 255), outline=OL)
+    for (x, y, col) in ((cx - 9, ty - 4, G_YELLOW), (cx - 6, ty - 5, (240, 170, 50, 255)), (cx - 4, ty - 3, G_YELLOW), (cx - 7, ty - 2, (240, 170, 50, 255))):
+        d.rectangle([x, y, x + 1, y + 1], fill=col)
+    for (x, col) in ((cx + 2, G_RED), (cx + 8, G_BLUE)):
+        d.rectangle([x - 2, ty - 8, x + 2, ty - 1], fill=col, outline=OL)
+        d.line([(x - 1, ty - 7), (x - 1, ty - 4)], fill=shade(col, 1.4))
+        d.line([(x + 1, ty - 11), (x + 1, ty - 8)], fill=(250, 250, 250, 255), width=1)
+    d.rectangle([cx - 1, ty + 1, cx + 3, ty + 4], fill=(255, 255, 255, 255), outline=OL)
+    d.point((cx + 1, ty + 2), fill=G_GREEN)
+    d.point((cx + 2, ty + 3), fill=G_RED)
+    return img
+
+
+# ---- auditorium ---------------------------------------------------------------------------------------
+def stage_tile():
+    """Pentas tinggi: tepi hadapan kayu, atas permaidani gelap; baris tile membentuk pentas."""
+    H = 44
+    img, d = new(56, H)
+    cx, cy, h = 28, H - 14, 14
+    wl, wr = (176, 124, 80, 255), (130, 88, 54, 255)
+    d.polygon([(cx - 28, cy - h), (cx, cy - h + 14), (cx, cy + 14), (cx - 28, cy)], fill=wl, outline=OL)
+    d.polygon([(cx + 28, cy - h), (cx, cy - h + 14), (cx, cy + 14), (cx + 28, cy)], fill=wr, outline=OL)
+    for z in (4, 9):
+        d.line([(cx - 27, cy - z), (cx - 1, cy - z + 14)], fill=shade(wl, 0.78))
+        d.line([(cx + 27, cy - z), (cx + 1, cy - z + 14)], fill=shade(wr, 0.78))
+    d.line([(cx - 27, cy - h + 1), (cx - 1, cy - h + 15)], fill=(214, 168, 120, 255))
+    carpet = (54, 56, 88, 255)
+    top = [(cx, cy - h - 14), (cx + 28, cy - h), (cx, cy - h + 14), (cx - 28, cy - h)]
+    d.polygon(top, fill=carpet, outline=shade(carpet, 0.78))
+    px = img.load()
+    rnd = random.Random(81)
+    for y in range(H):
+        for x in range(56):
+            if px[x, y] == carpet:
+                if (x + 2 * y) % 4 == 0:
+                    px[x, y] = tint_add(carpet, -5)
+                elif rnd.random() < 0.07:
+                    px[x, y] = tint_add(carpet, 8)
+    d.line([(cx - 25, cy - h), (cx - 1, cy - h + 12)], fill=G_YELLOW)
+    d.line([(cx + 25, cy - h), (cx + 1, cy - h + 12)], fill=shade(G_YELLOW, 0.8))
+    d.line([(cx - 27, cy - h), (cx - 1, cy - h + 14)], fill=OL)
+    d.line([(cx + 27, cy - h), (cx + 1, cy - h + 14)], fill=OL)
+    return img
+
+
+def launch_flat(w, h, text_px=9):
+    """Grafik 'launch' untuk skrin LED: langit ungu-biru, bintang, roket dan jejak warna Google."""
+    fl, fd = new(w, h)
+    for y in range(h):
+        t = y / (h - 1)
+        fd.line([(0, y), (w - 1, y)], fill=(int(24 + 40 * t), int(30 + 22 * t), int(86 + 44 * t), 255))
+    rnd = random.Random(91)
+    for _ in range(24):
+        x, y = rnd.randint(1, w - 2), rnd.randint(1, h - 16)
+        fd.point((x, y), fill=(255, 255, 255, 255) if rnd.random() < 0.6 else (160, 180, 240, 255))
+    for i, col in enumerate((G_BLUE, G_RED, G_YELLOW, G_GREEN)):
+        o = (i - 1.5) * 3
+        fd.line([(6 + o, h - 18), (w * 0.5 + o, h * 0.4)], fill=col, width=2)
+    r = rocket_img(1.5, -38)
+    fl.alpha_composite(r, (int(w * 0.6) - r.width // 2, int(h * 0.34) - r.height // 2))
+    fd.polygon(star_pts(8, 9, 5, 2), fill=G_YELLOW)
+    x0, y0, x1, y1 = text_size('LAUNCH', text_px)
+    tw = x1 - x0
+    for dx in (0, 1):
+        pixel_text(fl, ((w - tw) // 2 - x0 + dx, h - 13 - y0), 'LAUNCH', text_px, (255, 255, 255, 255))
+    return fl
+
+
+def stage_screen():
+    """Skrin LED besar atas rangka, menghadap +r (satah selari paksi c, macam projector_screen)."""
+    H = 110
+    img, d = new(56, H)
+    W, Hs = 52, 64
+    x0, y0 = 2, H - 28 - 14 - Hs
+    gy = lambda x: H - 28 + (x - 2) // 2
+    for x in (8, 48):
+        d.rectangle([x - 1, y0 + Hs + (x - 2) // 2 - 4, x + 1, gy(x)], fill=(60, 64, 76, 255), outline=OL)
+        d.rectangle([x - 6, gy(x) - 1, x + 6, gy(x) + 2], fill=(80, 84, 96, 255), outline=OL)
+    fl, fd = new(W, Hs)
+    fd.rectangle([0, 0, W - 1, Hs - 1], fill=(40, 42, 52, 255), outline=OL)
+    fd.rectangle([1, 1, W - 2, 2], fill=(86, 90, 104, 255))
+    fl.alpha_composite(launch_flat(W - 6, Hs - 8), (3, 3))
+    for y in range(4, Hs - 5, 2):
+        for x in range(3, W - 3):
+            r, g, b, a = fl.getpixel((x, y))
+            fl.putpixel((x, y), (int(r * 0.9), int(g * 0.9), int(b * 0.92), a))
+    fd.rectangle([2, Hs - 4, W - 3, Hs - 2], fill=(60, 64, 76, 255))
+    for i, col in enumerate((G_BLUE, G_RED, G_YELLOW, G_GREEN)):
+        fd.rectangle([W - 14 + i * 3, Hs - 3, W - 13 + i * 3, Hs - 3], fill=col)
+    paste_L(img, fl, x0, y0)
+    return img
+
+
+def podium():
+    """Podium kayu dengan permukaan condong, mikrofon gooseneck dan logo kecil di depan."""
+    H = 64
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    wood = dict(top=(176, 124, 80, 255), left=(150, 102, 64, 255), right=(112, 76, 48, 255), hi=(208, 160, 116, 255))
+    ibox(d, H, 0.12, 0.88, 0.22, 0.78, 0, 30, wood['top'], wood['left'], wood['right'], wood['hi'])
+    d.polygon([p(0.1, 0.2, 34), p(0.9, 0.2, 34), p(0.9, 0.8, 30), p(0.1, 0.8, 30)], fill=(206, 160, 114, 255), outline=OL)
+    d.polygon([p(0.1, 0.8, 30), p(0.9, 0.8, 30), p(0.9, 0.8, 28), p(0.1, 0.8, 28)], fill=(112, 76, 48, 255), outline=OL)
+    d.polygon([p(0.9, 0.8, 30), p(0.9, 0.2, 34), p(0.9, 0.2, 32), p(0.9, 0.8, 28)], fill=wood['right'], outline=OL)
+    d.polygon([p(0.2, 0.78, 4), p(0.8, 0.78, 4), p(0.8, 0.78, 26), p(0.2, 0.78, 26)], outline=shade(wood['left'], 0.72))
+    fl, fd = new(9, 9)
+    fd.pieslice([0, 0, 8, 8], 180, 270, fill=G_RED)
+    fd.pieslice([0, 0, 8, 8], 270, 360, fill=G_YELLOW)
+    fd.pieslice([0, 0, 8, 8], 0, 90, fill=G_GREEN)
+    fd.pieslice([0, 0, 8, 8], 90, 180, fill=G_BLUE)
+    fd.ellipse([2, 2, 6, 6], fill=(255, 255, 255, 255))
+    x, y = p(0.5, 0.78, 20)
+    paste_L(img, fl, x - 4, y - 4)
+    mx, my = p(0.46, 0.4, 33)
+    neck = [(mx, my), (mx - 1, my - 6), (mx + 2, my - 11), (mx + 5, my - 12)]
+    d.line(neck, fill=OL, width=3)
+    d.line(neck, fill=(120, 126, 140, 255), width=1)
+    d.ellipse([mx + 4, my - 16, mx + 8, my - 11], fill=(40, 42, 50, 255), outline=OL)
+    d.point((mx + 5, my - 15), fill=(160, 166, 180, 255))
+    d.polygon([p(0.55, 0.42, 33), p(0.8, 0.42, 33), p(0.8, 0.7, 31), p(0.55, 0.7, 31)], fill=(250, 248, 238, 255), outline=OL)
+    d.line([p(0.6, 0.5, 32), p(0.75, 0.5, 32)], fill=(170, 176, 190, 255))
+    return img
+
+
+def speaker_stack():
+    """Menara speaker PA: subwoofer di bawah, speaker 2-hala di atas, LED hijau."""
+    H = 70
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    blk = dict(top=(62, 64, 78, 255), left=(40, 42, 54, 255), right=(28, 30, 40, 255), hi=(110, 114, 132, 255))
+    ibox(d, H, 0.08, 0.92, 0.12, 0.88, 0, 22, blk['top'], blk['left'], blk['right'], blk['hi'])
+    ibox(d, H, 0.18, 0.82, 0.22, 0.78, 22, 46, blk['top'], blk['left'], blk['right'], blk['hi'])
+    fl, fd = new(22, 20)
+    fd.ellipse([2, 1, 19, 18], fill=(20, 22, 30, 255), outline=(120, 126, 146, 255))
+    fd.ellipse([6, 5, 15, 14], fill=(62, 66, 86, 255), outline=(20, 22, 30, 255))
+    fd.ellipse([9, 8, 12, 11], fill=(120, 126, 146, 255))
+    x0, y0 = p(0.12, 0.88, 21)
+    paste_L(img, fl, x0, y0)
+    fl2, fd2 = new(16, 22)
+    fd2.ellipse([2, 8, 13, 19], fill=(20, 22, 30, 255), outline=(120, 126, 146, 255))
+    fd2.ellipse([5, 11, 10, 16], fill=(62, 66, 86, 255))
+    fd2.ellipse([5, 1, 10, 6], fill=(20, 22, 30, 255), outline=(120, 126, 146, 255))
+    fd2.point((7, 3), fill=(150, 156, 176, 255))
+    x0, y0 = p(0.22, 0.78, 45)
+    paste_L(img, fl2, x0, y0 + 1)
+    for z0 in (5, 28):
+        d.line([p(0.92, 0.35, z0 + 8), p(0.92, 0.65, z0 + 8)], fill=(80, 84, 100, 255))
+    d.line([p(0.92, 0.2, 2), p(0.92, 0.8, 2)], fill=G_BLUE)
+    d.point(p(0.82, 0.7, 40), fill=G_GREEN)
+    d.point(p(0.82, 0.62, 40), fill=G_RED)
+    return img
+
+
+def banner_flat(variant):
+    """Sepanduk 84x40: jalur warna Google atas/bawah, panel navy, bintang atau roket, teks LAUNCH."""
+    W, Hh = 84, 40
+    fl, d = new(W, Hh)
+    d.rectangle([0, 0, W - 1, Hh - 1], fill=(250, 250, 252, 255), outline=OL)
+    d.rectangle([2, 2, W - 3, Hh - 3], fill=NAVY)
+    seg = (G_BLUE, G_RED, G_YELLOW, G_GREEN) if variant == 'a' else (G_GREEN, G_YELLOW, G_RED, G_BLUE)
+    for i in range(4):
+        x0, x1 = 1 + i * 20, 1 + (i + 1) * 20 - (0 if i < 3 else 1)
+        d.rectangle([x0, 1, x1, 4], fill=seg[i])
+        d.rectangle([x0, Hh - 5, x1, Hh - 2], fill=seg[3 - i])
+    rnd = random.Random(95 if variant == 'a' else 96)
+    for _ in range(22):
+        x, y = rnd.randint(3, W - 4), rnd.randint(6, Hh - 7)
+        d.point((x, y), fill=(120, 134, 200, 255))
+    size = 12
+    bx0, by0, bx1, by1 = text_size('LAUNCH', size)
+    tw, th = bx1 - bx0, by1 - by0
+    if variant == 'a':
+        d.polygon(star_pts(16, 21, 12, 5), fill=G_YELLOW, outline=OL)
+        d.polygon(star_pts(16, 21, 7, 3), fill=(255, 226, 120, 255))
+        tx = 31
+    else:
+        tx = 4
+        r = rocket_img(1.15, -30)
+        fl.alpha_composite(r, (W - 4 - r.width, (Hh - r.height) // 2 + 1))
+        for i, col in enumerate((G_BLUE, G_RED, G_YELLOW)):
+            d.line([(60 + i * 2, Hh - 8 - i * 2), (66 + i * 2, Hh - 14 - i * 2)], fill=col)
+        d.polygon(star_pts(60, 11, 4, 2), fill=G_YELLOW)
+    for dx in (0, 1):
+        pixel_text(fl, (tx - bx0 + dx, (Hh - th) // 2 - by0), 'LAUNCH', size, (255, 255, 255, 255))
+    for (gx, gy) in ((3, 6), (W - 4, 6), (3, Hh - 7), (W - 4, Hh - 7)):
+        d.ellipse([gx - 1, gy - 1, gx + 1, gy + 1], fill=CHROME, outline=OL)
+    return fl
+
+
+def venue_assets():
+    return {
+        'water_a': water_tile('a'), 'water_b': water_tile('b'), 'pool_ladder': pool_ladder(),
+        'diving_board': diving_board(), 'garden_tree': garden_tree(), 'flower_bed': flower_bed(), 'fountain': fountain(),
+        'dj_booth': dj_booth(), 'bar_counter': bar_counter(), 'balloons': balloons(), 'party_table': party_table(),
+        'stage': stage_tile(), 'stage_screen': stage_screen(), 'podium': podium(), 'speaker_stack': speaker_stack(),
+        'wall_banner_a': shear(banner_flat('a'), 'A'), 'wall_banner_b': shear(banner_flat('b'), 'B'),
+    }
+
+
+def make_venue_preview(folder, assets, base, multi):
+    """Preview kolam/parti/auditorium: grid sprite, adegan ujian, dan ujian checker air/dek."""
+    folder.mkdir(parents=True, exist_ok=True)
+    names = [n for n in assets if n.split('_')[0] != 'water']
+    cols, cell_w, cell_h = 6, 100, 130
+    sheet = Image.new('RGBA', (cols * cell_w, ((len(names) + cols - 1) // cols) * cell_h), (190, 140, 90, 255))
+    for i, name in enumerate(names):
+        img = assets[name]
+        sheet.alpha_composite(img, ((i % cols) * cell_w + (cell_w - img.width) // 2, (i // cols) * cell_h + cell_h - img.height - 4))
+    sheet.resize((sheet.width * 2, sheet.height * 2), Image.NEAREST).save(folder / 'preview_venue.png')
+
+    gc, gr = 14, 11
+    W, Hh = (gc + gr) * 28 + 40, (gc + gr) * 14 + 190
+    ox, oy = gr * 28 + 20, 150
+    scene = Image.new('RGBA', (W, Hh), (60, 64, 72, 255))
+    center = lambda c, r: (ox + (c - r) * 28, oy + (c + r) * 14)
+    pool = lambda c, r: 3 <= c <= 8 and 3 <= r <= 6
+    for r in range(gr):
+        for c in range(gc):
+            ab = 'a' if (c + r) % 2 == 0 else 'b'
+            if pool(c, r):
+                t = assets[f'water_{ab}']
+            elif c >= 10:
+                t = base[f'floor_{ab}']
+            elif r >= 8:
+                t = multi[f'grass_{ab}']
+            else:
+                t = multi[f'deck_{ab}']
+            x, y = center(c, r)
+            scene.alpha_composite(t, (x - 28, y - 14))
+    items = [('pool_ladder', 2, 4), ('diving_board', 3, 7), ('garden_tree', 1, 9), ('flower_bed', 4, 9), ('fountain', 7, 9),
+             ('flower_bed', 5, 9), ('dj_booth', 0, 1), ('bar_counter', 5, 1), ('balloons', 8, 1), ('party_table', 9, 3),
+             ('party_table', 9, 6), ('umbrella_table', 0, 6)]
+    for c in range(10, 14):
+        items.append(('stage', c, 2))
+        items.append(('stage', c, 3))
+    items += [('stage_screen', 10, 1), ('stage_screen', 11, 1), ('podium', 12, 4), ('speaker_stack', 10, 5),
+              ('speaker_stack', 13, 5), ('chair_blue', 11, 7), ('chair_red', 12, 7)]
+    extra = {'chair_blue': chair(G_BLUE), 'chair_red': chair(G_RED)}
+    for kind, c, r in sorted(items, key=lambda t: (t[1] + t[2], t[0] != 'stage')):
+        img = assets.get(kind) or multi.get(kind) or extra[kind]
+        x, y = center(c, r)
+        scene.alpha_composite(img, (x - img.width // 2, y + 14 - img.height))
+    bx, by = center(10, 0)
+    scene.alpha_composite(assets['wall_banner_a'], (bx - 26, by - 90))
+    scene.resize((W * 2, Hh * 2), Image.NEAREST).save(folder / 'preview_venue_scene.png')
+
+    n = 8
+    t = Image.new('RGBA', (n * 56 + 56, n * 28 + 56), (60, 64, 72, 255))
+    for r in range(n):
+        for c in range(n):
+            ab = 'a' if (c + r) % 2 == 0 else 'b'
+            src = assets[f'water_{ab}'] if c < 4 else multi[f'deck_{ab}']
+            t.alpha_composite(src, (n * 28 + (c - r) * 28, 14 + (c + r) * 14))
+    t.resize((t.width * 3, t.height * 3), Image.NEAREST).save(folder / 'preview_venue_checker.png')
+
+
 def build(preview=None):
     OUT.mkdir(parents=True, exist_ok=True)
 
@@ -3178,11 +3805,16 @@ def build(preview=None):
     for name, img in multi.items():
         img.save(OUT / f'{name}.png')
 
-    print(f'{len(assets) + len(walls) + len(staff) + len(multi)} fail ditulis ke {OUT}')
+    venue = venue_assets()
+    for name, img in venue.items():
+        img.save(OUT / f'{name}.png')
+
+    print(f'{len(assets) + len(walls) + len(staff) + len(multi) + len(venue)} fail ditulis ke {OUT}')
 
     if preview:
         make_preview(Path(preview), {**assets, 'wall_dartboard_b': walls['wall_dartboard_b'], 'wall_door_b': walls['wall_door_b']})
         make_multifloor_preview(Path(preview), multi, assets)
+        make_venue_preview(Path(preview), venue, assets, multi)
 
 
 def make_preview(folder, assets):

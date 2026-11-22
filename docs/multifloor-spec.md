@@ -7,10 +7,13 @@ Ikut nama dan bentuk data di sini dengan tepat.
 
 | id | Tab | Isi |
 |----|-----|-----|
-| 1 | L1 | Pintu masuk + reception, training area, meeting room (client), sales department, client space, toilet, pantry berjenama (maks 2 orang), tangga |
-| 2 | L2 | Marketing department, Head of Department office, big meeting room (boardroom), IT department, big pantry, toilet, outdoor chill (teres), tangga |
-| 3 | L3 | Pejabat CEO, CFO, MD, HOD (Heads of Department), chill area (snooker/dart/pong/foos), gaming area, outdoor working area, tangga |
-| 4 | Rooftop | Taman rooftop: dek, rumput, BBQ, payung, kerusi rehat, pokok, unit aircond, pondok tangga. Tiada dinding, pagar kaca di semua tepi |
+| 1 | L1 | Pintu masuk + reception, Launch Auditorium (pentas, skrin, 28 kerusi), meeting room (client), training room (bilik kaca), client space, Chill & Game zone (snooker, ping-pong, foosball, dart, lounge, arcade, TV console + beanbag), toilet, pantry berjenama (maks 2 orang), tangga |
+| 2 | L2 | Sales department (12 meja), Marketing department, Head of Department office, IT department, big pantry, toilet, outdoor chill (teres), tangga |
+| 3 | L3 | Pejabat CEO, CFO, MD, HOD (Heads of Department) + Big Meeting Room (meja 9x2, 35 tempat) + lounge eksekutif, tangga |
+| 4 | Rooftop | Kolam renang (air 9x4), taman (rumput, pokok, air pancut), kawasan party (BBQ, bar, DJ), payung, kerusi rehat, unit aircond, pondok tangga. Tiada dinding, pagar kaca di semua tepi |
+
+Nama tab: L1 'Lobi, Auditorium & Chill', L2 'Sales, Marketing, IT & Big Pantry', L3 'Eksekutif & Big Meeting Room',
+Rooftop 'Kolam Renang, Taman & Party'.
 
 Setiap aras guna grid sama 28 x 20 (c 0..27, r 0..19). Baris r=0 dan lajur c=0 ialah luar dinding (disekat).
 L1-L3 ada dinding belakang A (sepanjang r=1) dan B (sepanjang c=1) seperti sekarang. Rooftop: `walls: false`.
@@ -31,29 +34,41 @@ Kunci lama dikekalkan (backend `DepartmentRouter`, hooks dan sweep guna kunci in
 |------|-------|-------|------|
 | 1 | `door` | Reception | Pintu masuk, spot (1,14). Staff baharu muncul di sini |
 | 1 | `reception`, `frontdesk` | Reception Counter / Front Desk | Kekal seperti sekarang (hideLabel) |
-| 1 | `training`* | Training Area | Meja latihan berderet (seats) + whiteboard/projector, 1-2 stand trainer di depan |
-| 1 | `meeting` | Meeting Room | Bilik mesyuarat klien (meja + seats + stands) |
-| 1 | `sales`* | Sales Department | Meja `desk` (seats auto) |
-| 1 | `client`* | Client Space | Sofa + coffee_table, seats/stands untuk pelanggan |
+| 1 | `auditorium`* | Launch Auditorium | c1..8 r1..9. DECOR `stage` r=2 (c2..8, disekat), `stage_screen` r=1; `podium` + `speaker_stack` di apron r=3; 4 baris x 7 seats (r5..8, lorong c=5) menghadap pentas (28); 3 stand penceramah di r=3 dan 4 stand belakang r=9; rug carpet; WALL_DECOR `wall_banner_a` |
+| 1 | `meeting` | Meeting Room | c10..12 r3..6 (meja + 3 seats + stands) |
+| 1 | `training`* | Training Room | Bilik kaca c15..20 r1..8 (`glass_b` c=14/21, `glass_a` r=9, pintu di c=17), whiteboard + projector_screen, 10 meja latihan + seats (lorong tengah c=17), 2 stand trainer, rug carpet |
+| 1 | `client`* | Client Space | c6..19 r10..12: tiga set sofa + coffee_table, seats r12, cooler |
+| 1 | `playroom` | Chill Area | r14..19: snooker c6..8, ping-pong c11..12, foosball c15..16, dart (papan dinding B, stand c=3), lounge sofa + coffee_table (r18..19). Rug checker dikongsi dengan Gaming |
+| 1 | `gaming` | Gaming Area | Arcade x4 (c13..16 r18), TV console (c18..19 r15) + 4 beanbag (stands act `play`) |
 | 1 | `pantry` | Pantry | Mesin berjenama, `capacity: 2`, queue, kekal di sayap kanan atas |
 | 1 | `toilet` | Toilet | Sayap kanan bawah |
 | 2 | `marketing`* | Marketing Department | Meja `desk` |
 | 2 | `kanban` | Marketing Plan | Papan tugas (stand), dalam kawasan marketing |
+| 2 | `sales` | Sales Department | 12 meja `desk` (seats auto): r10 dan r13, c11..13 dan c16..18 (tempat bekas big meeting room) |
 | 2 | `head_office`* | Head of Department | Bilik kaca, `exec_desk` + seat, 2 stand pelawat |
 | 2 | `approval` | Approval | Loceng di pintu bilik Head of Department |
-| 2 | `boardroom` | Big Meeting Room | Meja panjang. Mesti muat 24 orang: seats + stands ≥ 24 (briefing semua staff demo) |
 | 2 | `frontend`, `backend`, `qa`, `research`, `deploy`, `ops` | IT · Frontend / IT · Backend / IT · QA / IT · Research / IT · DevOps / IT · Ops | Kluster meja IT Department |
 | 2 | `coffee` | Big Pantry · Coffee | Mesin kopi, kaunter pantri, peti sejuk |
-| 2 | `water_cooler` | Big Pantry · Lounge | Meja makan/sofa dalam big pantry |
+| 2 | `water_cooler` | Big Pantry · Lounge | SATU meja di sebelah sofa + cooler (tiada meja kerja/makan lain) |
 | 2 | `toilet_2`* | Toilet L2 | |
 | 2 | `outdoor_chill`* | Outdoor Chill | Teres luar: dek, kerusi rehat, payung |
 | 3 | `ceo`*, `cfo`*, `md`*, `hod`* | CEO Office / CFO Office / MD Office / HOD Office | Bilik kaca, `exec_desk` + 1 seat + 2 stand pelawat |
-| 3 | `playroom` | Chill Area | Snooker, dart, pong, foos (stands act play/dart) |
-| 3 | `gaming`* | Gaming Area | Arcade, TV console + beanbag (stands act `play`) |
-| 3 | `outdoor_work`* | Outdoor Working | Dek luar, `outdoor_desk` + seats, payung |
-| 4 | `rooftop`* | Rooftop | Banyak stands (≥ 16), sebahagian act `drink` dekat BBQ |
+| 3 | `boardroom` | Big Meeting Room | c8..18 r9..15 di tengah L3: `boardtable` 9x2 (r11..12), 9 seats (r13) + 26 stands = 35 (>= 30), projector + whiteboard di r=9, rug carpet. Dekor lounge eksekutif (sofa, coffee_table, pokok) tanpa department |
+| 4 | `rooftop`* | Garden & Party | Taman kiri (grass c2..8), BBQ + bar + DJ atas, umbrella kanan bawah. >= 16 stands (29), sebahagian act `drink` dekat BBQ/bar |
+| 4 | `pool`* | Swimming Pool | Dek kolam renang: stands di tebing (24, sebahagian act `drink`), kerusi rehat dan umbrella_table |
 
-Sweep chill masih hantar ke `playroom` (kini L3). Approval kini di L2 (pintu Head of Department).
+Dibuang: `outdoor_work` dan `outdoor_desk` (L3). `sales` pindah L1 -> L2, `boardroom` L2 -> L3, `playroom` dan `gaming` L3 -> L1.
+Sweep chill masih hantar ke `playroom` (kini L1). Approval di L2 (pintu Head of Department).
+
+### Rooftop
+
+- Kolam: `ZONES` tile `water` (sprite `water_a` / `water_b`, dilukis atas dek) pada c10..18 r9..12. Setiap sel air
+  disekat melalui DECOR `{ floor: 4, kind: 'block', cells }` (kind `block` = penyekat tak nampak, enjin tak lukis).
+  `pool_ladder` (19,11) dan `diving_board` (14,8) di tebing.
+- Taman: grass c2..8 r5..18, `garden_tree`, `flower_bed`, `fountain` (5,11, tanpa FX), `planter`, `plant`.
+- Party: `dj_booth` (22,4) + `speaker_stack`, `bar_counter` (c16..18 r3), `bbq` (c12..13 r3), `balloons`, `party_table`,
+  `umbrella_table`, `lounger`.
+- Pagar kaca di semua tepi, `ac_unit`, `stair_hut` (26,10) dan landing (25,10) kekal.
 
 ## Bentuk data `resources/js/office/layout.js`
 
@@ -62,9 +77,9 @@ export const GRID, TILE, ORIGIN, CANVAS               // sama macam dulu (ORIGIN
 export const FLOORS = [{ id, key, label, name, walls }]  // 4 entri
 export const STAIRS = { cell, landing }
 export const DEPARTMENTS = { key: { floor, label, spot, cells, seats?, stands?, queue?, capacity?, hideLabel? } }
-export const DECOR = [{ floor, kind, cells }]          // disekat (kecuali kind 'plant' tetap disekat juga)
+export const DECOR = [{ floor, kind, cells }]          // disekat (kind 'plant' pun disekat; kind 'block' = penyekat tak nampak, tidak dilukis)
 export const ZONES = [{ floor, c0, r0, c1, r1, color?, alpha?, tile? }]
-//   tile: 'deck' | 'grass' | 'carpet'  -> enjin guna sprite `${tile}_a` / `${tile}_b` (checker) gantikan lantai kayu
+//   tile: 'deck' | 'grass' | 'carpet' | 'water'  -> enjin guna sprite `${tile}_a` / `${tile}_b` (checker) gantikan lantai kayu
 //   color/alpha: tint permaidani seperti sekarang
 export const WALL_DECOR = [{ floor, key, wall: 'A' | 'B', u, vTop }]   // sprite dinding (window, poster, door...)
 export const FLOOR_FX = [{ floor, kind: 'steam' | 'bubbles' | 'pong', c, r }]  // kesan ambien
@@ -82,14 +97,16 @@ tengah tile + 14px, lebar 56). Sofa/kerusi/beanbag berwarna ikut nama, cth. `sof
 
 ## Sprite baharu (`tools/make_sprites.py`)
 
-Furniture (tile, disekat): `stairs`, `stair_hut`, `training_desk`, `projector_screen`, `whiteboard`, `coffee_table`,
+Furniture (tile, disekat): `stage`, `stage_screen`, `podium`, `speaker_stack` (auditorium L1); `pool_ladder`, `diving_board`,
+`garden_tree`, `flower_bed`, `fountain`, `dj_booth`, `bar_counter`, `balloons`, `party_table` (rooftop); sprite dinding
+`wall_banner_a`. Sedia ada: `stairs`, `stair_hut`, `training_desk`, `projector_screen`, `whiteboard`, `coffee_table`,
 `exec_desk`, `glass_a`, `glass_b` (dinding pejabat kaca, geometri sama `partition_a` / `partition_b`), `arcade`,
 `tv_console`, `beanbag_blue`, `beanbag_red`, `beanbag_yellow`, `beanbag_green`, `umbrella_table`, `lounger`, `bbq`,
-`planter`, `outdoor_desk`, `ac_unit`, `pantry_counter`, `railing_a`, `railing_b` (pagar kaca tepi; `_a` sepanjang
+`planter`, `ac_unit`, `pantry_counter`, `railing_a`, `railing_b` (pagar kaca tepi; `_a` sepanjang
 paksi c iaitu tepi hadapan r=19, `_b` sepanjang paksi r iaitu tepi hadapan c=27; untuk tepi belakang rooftop guna
 sprite sama).
 
-Jubin lantai (56 x 28, tidak disekat): `deck_a`, `deck_b`, `grass_a`, `grass_b`, `carpet_a`, `carpet_b`.
+Jubin lantai (56 x 28, tidak disekat): `deck_a`, `deck_b`, `grass_a`, `grass_b`, `carpet_a`, `carpet_b`, `water_a`, `water_b` (air kolam, dilukis atas dek).
 
 Gaya staff baharu: `exec` (lelaki, sut + tali leher) dan `exec_w` (wanita, blazer + skirt pensel). Tint shirt:
 `exec` 0x1f2a44, `exec_w` 0x3b2a4a. Tambah ke `AVATARS` (JS dan PHP), label 'Eksekutif' / 'Eksekutif (wanita)'.

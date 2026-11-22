@@ -104,7 +104,7 @@ const IMAGE_NAMES = [
 function layoutImageNames() {
     const names = new Set();
     for (const d of Object.values(DEPARTMENTS)) for (const cell of d.cells ?? []) names.add(cell.kind);
-    for (const item of DECOR) names.add(item.kind);
+    for (const item of DECOR) if (item.kind !== 'block') names.add(item.kind); // 'block' = penghalang tak kelihatan (cth. air kolam)
     for (const w of WALL_DECOR) names.add(w.key);
     for (const z of ZONES) {
         if (z.tile) {
@@ -436,6 +436,23 @@ export default class OfficeScene extends Phaser.Scene {
                 for (let c = z.c0; c <= z.c1; c++) tilePolyF(tint, f.id, c, r, z.color, z.alpha ?? 0.15);
             }
         }
+        // Air kolam: kilauan lembut berdenyut (jubin 'water', fasa ikut kedudukan supaya nampak beriak)
+        for (const [key, tile] of zoneTile) {
+            if (tile !== 'water') continue;
+            const [c, r] = key.split(',').map(Number);
+            const shimmer = this.put(f.id, this.add.graphics().setDepth(-999));
+            tilePolyF(shimmer, f.id, c, r, 0xffffff, 0.22);
+            shimmer.setAlpha(0.2);
+            this.tweens.add({
+                targets: shimmer,
+                alpha: { from: 0.05, to: 0.7 },
+                duration: 1100 + ((c * 7 + r * 13) % 5) * 180,
+                delay: ((c + r) % 6) * 160,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut',
+            });
+        }
         // Tepi hadapan lantai
         outline(tint, [L, F, R], C.slabTop, 2, 0.9, false);
     }
@@ -713,7 +730,7 @@ export default class OfficeScene extends Phaser.Scene {
             for (const cell of DEPARTMENTS[key].cells ?? []) place(cell.kind, cell.c, cell.r, key);
         }
         for (const item of DECOR) {
-            if ((item.floor ?? 1) !== fid) continue;
+            if ((item.floor ?? 1) !== fid || item.kind === 'block') continue;
             for (const cell of item.cells) place(item.kind, cell.c, cell.r, null);
         }
 

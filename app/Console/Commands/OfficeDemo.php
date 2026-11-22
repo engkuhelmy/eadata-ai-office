@@ -16,10 +16,12 @@ use Illuminate\Console\Command;
  * 5 staff "team" ikut kitaran: board briefing ramai-ramai, ambil tugas di papan kanban, kerja di meja,
  * kemudian chill (sweep hantar ke chill room selepas idle 2 minit).
  * 8 staff "rotator" pusing tanpa henti: kerja -> tandas L2 (toilet_2) -> pantri -> chill (playroom / gaming /
- * outdoor_chill / rooftop, rawak setiap kali) -> kerja, dalam semua fasa, kecuali masa briefing.
+ * pool / rooftop / outdoor_chill, rawak setiap kali) -> kerja, dalam semua fasa, kecuali masa briefing.
  * Modul staff aras (App\Office\Demo\FloorStaffModule, matikan dengan --no-floors): CEO/CFO/MD/HOD di L3, Head of
- * Department + Marketing di L2, Sales + Training di L1, setiap seorang pusing ikut rutin peribadi.
- * Briefing (awal setiap kitaran): team + rotator + staff aras berkumpul di boardroom (Big Meeting Room, L2).
+ * Department + Marketing + Sales di L2, Training di L1, setiap seorang pusing ikut rutin peribadi.
+ * Modul itu juga jalankan dua acara (matikan dengan --no-events): pelancaran produk di 'auditorium' L1 (Cikgu Azlan +
+ * penonton, ~6-8 min sekali) dan pool party di rooftop ('pool' / 'rooftop', ~10-12 min sekali, termasuk beberapa rotator).
+ * Briefing (awal setiap kitaran): team + rotator + staff aras berkumpul di boardroom (Big Meeting Room, L3).
  * Modul reception (App\Office\Demo\ReceptionModule, matikan dengan --no-reception): Reni duduk di kaunter reception,
  * penghantar Grab / ShopeeFood / J&T / DHL tekan loceng pintu, masuk ke kaunter sahaja, serah barang, lalu keluar
  * (sesi mereka ditamatkan dan dipadam ~25s kemudian). Lepas tiap penghantaran Reni pusing seluruh bangunan.
@@ -34,7 +36,8 @@ class OfficeDemo extends Command
         {--speed=1 : Pecutan masa (2 = dua kali ganda laju)}
         {--once : Satu kitaran sahaja}
         {--no-reception : Matikan modul reception (penyambut tetamu + penghantar)}
-        {--no-floors : Matikan modul staff aras (eksekutif L3, marketing L2, sales + training L1)}';
+        {--no-floors : Matikan modul staff aras (eksekutif L3, marketing + sales L2, training L1) dan acara-acaranya}
+        {--no-events : Matikan acara sahaja (pelancaran produk + pool party); staff aras tetap jalan}';
 
     protected $description = 'Demo 24 jam, bangunan 4 aras: 25 staff + penyambut tetamu (briefing, kerja, tandas, pantri, chill, rutin eksekutif, penghantaran). Sesi staff tak ditamatkan.';
 
@@ -55,7 +58,7 @@ class OfficeDemo extends Command
     ];
 
     /** Tempat chill rotator (dipilih rawak setiap lawatan). */
-    public const CHILL_ROOMS = ['playroom', 'gaming', 'outdoor_chill', 'rooftop'];
+    public const CHILL_ROOMS = ['playroom', 'gaming', 'pool', 'rooftop', 'outdoor_chill'];
 
     /** Had keras: paling ramai 2 orang dalam pantri serentak. */
     public const PANTRY_CAPACITY = 2;
@@ -85,6 +88,9 @@ class OfficeDemo extends Command
     /** True semasa semua orang tahan di boardroom (rotator berhenti pusing). */
     private bool $rotHold = false;
 
+    /** @var array<string, true> rotator yang tengah pool party (dipegang FloorStaffModule; tickRotators langkau mereka) */
+    private array $partying = [];
+
     /** @var array<string, array{input:int,output:int,cache_read:int,cache_create:int}> */
     private array $usage = [];
 
@@ -95,6 +101,7 @@ class OfficeDemo extends Command
     public function handle(): int
     {
         $this->speed = max(0.1, (float) $this->option('speed'));
+        $this->partying = [];
         $this->pantryClear(); // instance command boleh dipakai semula (test)
         $this->team = $this->buildTeam();
         $this->rotators = $this->buildRotators();
@@ -114,7 +121,15 @@ class OfficeDemo extends Command
         $this->floors = null;
         if (! $this->option('no-floors')) {
             // Belum hantar event: briefing pertama terus tahan mereka, resume() lepas briefing
-            $this->floors = new FloorStaffModule($emit, speed: $this->speed, pantryEnter: $enter, pantryLeave: $leave);
+            $this->floors = new FloorStaffModule(
+                $emit,
+                speed: $this->speed,
+                pantryEnter: $enter,
+                pantryLeave: $leave,
+                events: ! $this->option('no-events'),
+                partyRotators: fn (): array => $this->partyCandidates(),
+                partyRotatorHook: fn (string $sid, bool $join) => $this->partyRotator($sid, $join),
+            );
             $this->floors->start();
         }
 
@@ -191,7 +206,7 @@ class OfficeDemo extends Command
 
     /**
      * 8 staff rotator: meja di research/deploy/ops (Nurul/Sofea/Aina, Zack/Danish/Mika, Qila/Hakim),
-     * lepas tu tandas L2, pantri, chill (playroom / gaming / outdoor_chill / rooftop), ulang.
+     * lepas tu tandas L2, pantri, chill (playroom / gaming / pool / rooftop / outdoor_chill), ulang.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -356,13 +371,14 @@ class OfficeDemo extends Command
     // ---- fasa ----
 
     /**
-     * Semua staff (team + rotator + staff aras) ke boardroom (Big Meeting Room L2) dan kekal ~70 saat.
+     * Semua staff (team + rotator + staff aras) ke boardroom (Big Meeting Room L3) dan kekal ~70 saat.
      * Lepas tu rotator sambung di peringkat berbeza dan staff aras sambung rutin di titik rawak.
      */
     private function standup(): void
     {
         $this->rotHold = true;
-        $this->floors?->hold();
+        $this->floors?->hold(); // batalkan acara (rotator parti dilepas; peringkat mereka di-reset di bawah)
+        $this->partying = [];
         // Semua ke boardroom: lepas slot pantri mereka (Reni, kalau tengah di pantri, kekal pegang slotnya)
         $briefing = $this->briefingStaff();
         foreach ($briefing as $m) {
@@ -545,6 +561,10 @@ class OfficeDemo extends Command
 
         $now = microtime(true);
         foreach ($this->rotators as $i => $m) {
+            if (isset($this->partying[$m['sid']])) {
+                continue; // tengah pool party: FloorStaffModule yang pegang
+            }
+
             $r = $this->rot[$i];
 
             if ($now >= $r['until']) {
@@ -600,6 +620,50 @@ class OfficeDemo extends Command
         if ($emit && $dept !== null) {
             // Habis kerja (masuk tandas): token Claude bertambah
             $this->emit($m, 'idle', null, null, $dept, $stage === self::STAGE_TOILET ? $this->bumpUsage($m) : null);
+        }
+    }
+
+    // ---- pool party (rotator disertakan oleh FloorStaffModule) ----
+
+    /**
+     * Rotator yang layak sertai parti: bukan semasa briefing, bukan di peringkat pantri / pegang slot pantri,
+     * belum dalam parti.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function partyCandidates(): array
+    {
+        if ($this->rotHold) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($this->rotators as $i => $m) {
+            if ($this->rot[$i]['stage'] !== self::STAGE_PANTRY && ! isset($this->pantry[$m['sid']]) && ! isset($this->partying[$m['sid']])) {
+                $out[] = $m;
+            }
+        }
+
+        return $out;
+    }
+
+    /** Rotator sertai (true) / tamat (false) parti. Tamat: sambung peringkat yang sama dari awal (bukan semasa briefing). */
+    private function partyRotator(string $sid, bool $join): void
+    {
+        if ($join) {
+            $this->partying[$sid] = true;
+
+            return;
+        }
+
+        unset($this->partying[$sid]);
+        if ($this->rotHold) {
+            return;
+        }
+        foreach ($this->rotators as $i => $m) {
+            if ($m['sid'] === $sid) {
+                $this->startStage($i, $this->rot[$i]['stage']);
+            }
         }
     }
 

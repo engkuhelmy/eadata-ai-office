@@ -12,10 +12,10 @@ class DepartmentRouter
         'reception', 'frontdesk',
         // Bangunan 4 aras (docs/multifloor-spec.md). Routing automatik masih guna kunci lama di atas sahaja;
         // kunci ini untuk demo, pin oleh owner dan department eksplisit (generic).
-        'training', 'sales', 'client', // L1
-        'marketing', 'head_office', 'toilet_2', 'outdoor_chill', // L2
-        'ceo', 'cfo', 'md', 'hod', 'gaming', 'outdoor_work', // L3
-        'rooftop', // L4
+        'training', 'client', 'gaming', 'auditorium', // L1 (gaming digabung dengan playroom: zon Chill & Game)
+        'sales', 'marketing', 'head_office', 'toilet_2', 'outdoor_chill', // L2
+        'ceo', 'cfo', 'md', 'hod', // L3 (boardroom = Big Meeting Room, di atas)
+        'rooftop', 'pool', // Rooftop: taman / dek parti + kolam renang
     ];
 
     private const FRONTEND_EXT = ['vue', 'tsx', 'jsx', 'css', 'scss', 'html'];

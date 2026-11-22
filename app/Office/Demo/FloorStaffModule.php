@@ -8,9 +8,18 @@ use Closure;
 /**
  * Modul demo staff aras (bangunan 4 aras): 12 staff yang setiap seorang pusing ikut rutin peribadi.
  *
- * L3: CEO Datuk Hafiz, CFO Mei Ling, MD Rajesh, HOD Puan Rosnah (pejabat masing-masing + lawatan).
- * L2: Head of Department Encik Kamal, Marketing Farah dan Iqbal.
- * L1: Sales Amir dan Liyana, trainer Cikgu Azlan, intern Danial dan Sara.
+ * L3: CEO Datuk Hafiz, CFO Mei Ling, MD Rajesh, HOD Puan Rosnah (pejabat masing-masing + lawatan; Big Meeting Room
+ *     'boardroom' juga di L3, kolam + taman di rooftop).
+ * L2: Head of Department Encik Kamal, Marketing Farah dan Iqbal, Sales Amir dan Liyana (lawat client/meeting L1).
+ * L1: trainer Cikgu Azlan (bilik kaca 'training' + 'auditorium'), intern Danial dan Sara.
+ *
+ * Dua acara demo (dimatikan dengan $events = false / --no-events):
+ *  - LAUNCH: ~3 min lepas start, kemudian setiap ~6-8 min, ~90s pelancaran produk di 'auditorium'. Cikgu Azlan
+ *    membentang, penonton = Farah, Iqbal, Amir, Liyana, Danial, Sara, Puan Rosnah.
+ *  - POOL PARTY: ~5 min lepas start, kemudian setiap ~10-12 min, ~75s parti di 'pool' / 'rooftop': 6-8 staff aras +
+ *    rotator rawak (rotator dibekalkan oleh pemanggil: $partyRotators / $partyRotatorHook).
+ * Acara tak jalan semasa hold() (briefing semua staff). Staff yang tengah acara ditahan dari rutin; habis acara
+ * mereka sambung rutin di hentian yang sama.
  *
  * Setiap hentian rutin = [department, min saat, max saat, teks bubble]. Sampai di hentian: tool_start (tool = teks
  * bubble), lepas 10-18s tool_end, kemudian 'idle' setiap ~20s selagi berlegar di situ (sweep tak pernah pindahkan
@@ -41,6 +50,33 @@ class FloorStaffModule
 
     public const PANTRY_CAPACITY = 2;
 
+    /** Pelancaran produk: mula pertama, jarak antara pelancaran, tempoh (saat, sebelum speed). */
+    public const LAUNCH_FIRST = 180;
+
+    public const LAUNCH_EVERY = [360, 480];
+
+    public const LAUNCH_LENGTH = [80, 100];
+
+    public const LAUNCH_PRESENTER = 'demo-azlan';
+
+    public const LAUNCH_AUDIENCE = ['demo-farah', 'demo-iqbal', 'demo-amir', 'demo-liyana', 'demo-danial', 'demo-sara', 'demo-rosnah'];
+
+    public const LAUNCH_PRESENTER_TEXT = 'Pelancaran produk baharu';
+
+    public const LAUNCH_AUDIENCE_TEXT = 'Hadir pelancaran produk';
+
+    /** Pool party: mula pertama, jarak, tempoh, bilangan peserta. */
+    public const PARTY_FIRST = 300;
+
+    public const PARTY_EVERY = [600, 720];
+
+    public const PARTY_LENGTH = [65, 85];
+
+    public const PARTY_SIZE = [6, 8];
+
+    /** Pool party: [department, teks bubble]. */
+    public const PARTY_STOPS = [['pool', 'Pool party!'], ['rooftop', 'Bakar BBQ di rooftop']];
+
     /**
      * Staff aras. routine: [department, min s, max s, teks bubble]. Teks unik dalam setiap rutin.
      *
@@ -62,14 +98,14 @@ class FloorStaffModule
             ['cfo', 50, 80, 'Sahkan invois pembekal'],
             ['coffee', 20, 35, 'Kopi di big pantry'],
             ['cfo', 50, 80, 'Unjuran aliran tunai'],
-            ['outdoor_work', 40, 60, 'Kira cukai di outdoor deck'],
+            ['pool', 40, 60, 'Rehat tepi kolam'],
         ]],
         ['vendor' => 'hermes', 'sid' => 'demo-rajesh', 'auto' => 'Hermes MD', 'label' => 'Hermes', 'name' => 'Rajesh', 'avatar' => 'exec', 'routine' => [
             ['md', 60, 90, 'Semak roadmap produk'],
             ['frontend', 20, 35, 'Walkabout IT: frontend'],
             ['backend', 20, 35, 'Walkabout IT: backend'],
             ['md', 50, 80, 'Mesyuarat dengan vendor'],
-            ['outdoor_work', 40, 60, 'Kerja di outdoor deck'],
+            ['rooftop', 40, 60, 'Ambil udara di taman'],
             ['gaming', 30, 45, 'Main arcade sekejap'],
         ]],
         ['vendor' => 'antigravity', 'sid' => 'demo-rosnah', 'auto' => 'Antigravity HOD', 'label' => 'Antigravity', 'name' => 'Puan Rosnah', 'avatar' => 'exec_w', 'routine' => [
@@ -110,6 +146,7 @@ class FloorStaffModule
             ['client', 30, 45, 'Layan pelanggan'],
             ['sales', 40, 70, 'Sediakan sebut harga'],
             ['meeting', 35, 50, 'Mesyuarat klien'],
+            ['auditorium', 25, 40, 'Semak pentas auditorium'],
             ['pantry', 20, 30, 'Minum di pantry'],
         ]],
         ['vendor' => 'hermes', 'sid' => 'demo-liyana', 'auto' => 'Hermes sales2', 'label' => 'Hermes', 'name' => 'Liyana', 'avatar' => 'woman', 'routine' => [
@@ -121,7 +158,7 @@ class FloorStaffModule
         ]],
         ['vendor' => 'claude', 'sid' => 'demo-azlan', 'auto' => 'Claude trainer', 'label' => 'Claude Code', 'name' => 'Cikgu Azlan', 'avatar' => 'default', 'routine' => [
             ['training', 80, 120, 'Ajar modul Laravel'],
-            ['meeting', 30, 45, 'Sediakan bahan latihan'],
+            ['auditorium', 30, 45, 'Sediakan bahan latihan di auditorium'],
             ['training', 80, 120, 'Sesi soal jawab'],
         ]],
         ['vendor' => 'codex', 'sid' => 'demo-danial', 'auto' => 'Codex intern1', 'label' => 'Codex', 'name' => 'Intern Danial', 'avatar' => 'genz', 'routine' => [
@@ -129,6 +166,7 @@ class FloorStaffModule
             ['toilet', 20, 30, 'Ke tandas'],
             ['training', 60, 90, 'Kuiz modul 1'],
             ['client', 25, 40, 'Ikut sales jumpa klien'],
+            ['auditorium', 25, 40, 'Bantu susun kerusi auditorium'],
         ]],
         ['vendor' => 'antigravity', 'sid' => 'demo-sara', 'auto' => 'Antigravity intern2', 'label' => 'Antigravity', 'name' => 'Intern Sara', 'avatar' => 'woman', 'routine' => [
             ['training', 70, 100, 'Latihan: reka UI'],
@@ -162,6 +200,24 @@ class FloorStaffModule
     /** @var array<string, true> pintu pantri dalaman (bila tiada pintu disuntik) */
     private array $ownPantry = [];
 
+    private bool $events;
+
+    /** @var (Closure(): array<int, array<string, mixed>>)|null rotator yang layak sertai parti (bukan di pantri / briefing) */
+    private ?Closure $partyRotators;
+
+    /** @var (Closure(string, bool): void)|null dipanggil bila rotator sertai (true) / tinggalkan (false) parti */
+    private ?Closure $partyRotatorHook;
+
+    private float $nextLaunchAt = 0.0;
+
+    private float $nextPartyAt = 0.0;
+
+    /** @var array{until: float, members: array<int, int>}|null */
+    private ?array $launch = null;
+
+    /** @var array{until: float, floor: array<int, array{k: int, dept: string, text: string}>, rot: array<int, array{m: array<string, mixed>, dept: string, text: string}>}|null */
+    private ?array $party = null;
+
     /**
      * Keadaan setiap staff (ikut indeks STAFF).
      *
@@ -176,7 +232,13 @@ class FloorStaffModule
         float $speed = 1.0,
         ?Closure $pantryEnter = null,
         ?Closure $pantryLeave = null,
+        bool $events = true,
+        ?Closure $partyRotators = null,
+        ?Closure $partyRotatorHook = null,
     ) {
+        $this->events = $events;
+        $this->partyRotators = $partyRotators;
+        $this->partyRotatorHook = $partyRotatorHook;
         $this->emit = $emit;
         $this->clock = $clock ?? fn (): float => microtime(true);
         $this->rand = $rand ?? fn (int $min, int $max): int => random_int($min, $max);
@@ -214,15 +276,21 @@ class FloorStaffModule
             );
         }
 
+        $now = ($this->clock)();
         $this->started = true;
         $this->held = false;
-        $this->schedule(($this->clock)());
+        $this->launch = null;
+        $this->party = null;
+        $this->nextLaunchAt = $now + self::LAUNCH_FIRST / $this->speed;
+        $this->nextPartyAt = $now + self::PARTY_FIRST / $this->speed;
+        $this->schedule($now);
     }
 
-    /** Tahan semua (briefing). Slot pantri dilepas; event boardroom dihantar oleh pemanggil. */
+    /** Tahan semua (briefing). Slot pantri dilepas, acara dibatalkan; event boardroom dihantar oleh pemanggil. */
     public function hold(): void
     {
         $this->held = true;
+        $this->cancelEvents();
         $this->releasePantry();
     }
 
@@ -231,14 +299,29 @@ class FloorStaffModule
     {
         $this->held = false;
         if ($this->started) {
-            $this->schedule(($this->clock)());
+            $now = ($this->clock)();
+            $this->schedule($now);
+            // Acara yang jatuh tempo semasa briefing ditunda sedikit (staff perlu masuk rutin dulu)
+            $this->nextLaunchAt = max($this->nextLaunchAt, $now + 30 / $this->speed);
+            $this->nextPartyAt = max($this->nextPartyAt, $now + 45 / $this->speed);
         }
     }
 
     public function finish(): void
     {
+        $this->cancelEvents();
         $this->releasePantry();
         $this->started = false;
+    }
+
+    public function isLaunchActive(): bool
+    {
+        return $this->launch !== null;
+    }
+
+    public function isPartyActive(): bool
+    {
+        return $this->party !== null;
     }
 
     public function isHeld(): bool
@@ -254,8 +337,17 @@ class FloorStaffModule
 
         $now = ($this->clock)();
 
+        if ($this->events) {
+            $this->tickLaunch($now);
+            $this->tickParty($now);
+        }
+
         foreach (array_keys(self::STAFF) as $k) {
             $s = $this->state[$k];
+
+            if ($s['phase'] === 'event') {
+                continue; // tengah acara: dikawal tickLaunch / tickParty
+            }
 
             if ($s['phase'] === 'wait') {
                 if ($now >= $s['until']) {
@@ -278,6 +370,172 @@ class FloorStaffModule
                 $this->state[$k]['ping'] = $now + self::PING_EVERY / $this->speed;
             }
         }
+    }
+
+    // ---- acara ----
+
+    private function tickLaunch(float $now): void
+    {
+        if ($this->launch !== null) {
+            if ($now >= $this->launch['until']) {
+                $this->endLaunch($now);
+            }
+
+            return;
+        }
+
+        if ($now < $this->nextLaunchAt) {
+            return;
+        }
+
+        $presenter = $this->indexOf(self::LAUNCH_PRESENTER);
+        if ($presenter === null || $this->state[$presenter]['phase'] === 'event') {
+            $this->nextLaunchAt = $now + 15 / $this->speed; // pembentang sibuk (parti): cuba sekejap lagi
+
+            return;
+        }
+
+        $members = [$presenter => self::LAUNCH_PRESENTER_TEXT];
+        foreach (self::LAUNCH_AUDIENCE as $sid) {
+            $k = $this->indexOf($sid);
+            if ($k !== null && $this->state[$k]['phase'] !== 'event') {
+                $members[$k] = self::LAUNCH_AUDIENCE_TEXT;
+            }
+        }
+
+        foreach ($members as $k => $text) {
+            $this->joinEvent($k, 'auditorium', $text);
+        }
+
+        $this->launch = ['until' => $now + ($this->rand)(...self::LAUNCH_LENGTH) / $this->speed, 'members' => $members];
+        $this->nextLaunchAt = $now + ($this->rand)(...self::LAUNCH_EVERY) / $this->speed;
+    }
+
+    private function endLaunch(float $now): void
+    {
+        foreach ($this->launch['members'] as $k => $text) {
+            ($this->emit)(self::STAFF[$k], 'tool_end', $text, null, 'auditorium');
+            $this->leaveEvent($k, $now);
+        }
+        $this->launch = null;
+    }
+
+    private function tickParty(float $now): void
+    {
+        if ($this->party !== null) {
+            if ($now >= $this->party['until']) {
+                $this->endParty($now);
+            }
+
+            return;
+        }
+
+        if ($now < $this->nextPartyAt) {
+            return;
+        }
+
+        // Peserta layak: staff aras yang tak tengah acara dan tak di pantri, + rotator yang dibekalkan pemanggil
+        $pool = [];
+        foreach (array_keys(self::STAFF) as $k) {
+            if ($this->state[$k]['phase'] !== 'event' && ! $this->state[$k]['pantry']) {
+                $pool[] = ['floor', $k];
+            }
+        }
+        foreach ($this->partyRotators ? ($this->partyRotators)() : [] as $m) {
+            $pool[] = ['rot', $m];
+        }
+
+        if (count($pool) < self::PARTY_SIZE[0]) {
+            $this->nextPartyAt = $now + 20 / $this->speed;
+
+            return;
+        }
+
+        $want = min(count($pool), ($this->rand)(...self::PARTY_SIZE));
+        $party = ['until' => $now + ($this->rand)(...self::PARTY_LENGTH) / $this->speed, 'floor' => [], 'rot' => []];
+
+        for ($n = 0; $n < $want; $n++) {
+            $pick = ($this->rand)(0, count($pool) - 1);
+            [$type, $who] = $pool[$pick];
+            array_splice($pool, $pick, 1);
+            [$dept, $text] = self::PARTY_STOPS[($this->rand)(0, count(self::PARTY_STOPS) - 1)];
+
+            if ($type === 'floor') {
+                $this->joinEvent($who, $dept, $text);
+                $party['floor'][] = ['k' => $who, 'dept' => $dept, 'text' => $text];
+            } else {
+                ($this->emit)($who, 'tool_start', $text, null, $dept);
+                if ($this->partyRotatorHook) {
+                    ($this->partyRotatorHook)($who['sid'], true);
+                }
+                $party['rot'][] = ['m' => $who, 'dept' => $dept, 'text' => $text];
+            }
+        }
+
+        $this->party = $party;
+        $this->nextPartyAt = $now + ($this->rand)(...self::PARTY_EVERY) / $this->speed;
+    }
+
+    private function endParty(float $now): void
+    {
+        $party = $this->party;
+        $this->party = null;
+
+        foreach ($party['floor'] as $p) {
+            ($this->emit)(self::STAFF[$p['k']], 'tool_end', $p['text'], null, $p['dept']);
+            $this->leaveEvent($p['k'], $now);
+        }
+        foreach ($party['rot'] as $p) {
+            ($this->emit)($p['m'], 'tool_end', $p['text'], null, $p['dept']);
+            if ($this->partyRotatorHook) {
+                ($this->partyRotatorHook)($p['m']['sid'], false); // rotator sambung peringkatnya
+            }
+        }
+    }
+
+    /** Staff aras ke acara: tool_start di bilik acara, lepas slot pantri (kalau ada), tahan dari rutin. */
+    private function joinEvent(int $k, string $dept, string $text): void
+    {
+        $s = $this->state[$k];
+        ($this->emit)(self::STAFF[$k], 'tool_start', $text, null, $dept);
+
+        if ($s['pantry']) {
+            ($this->pantryLeave)(self::STAFF[$k]['sid']); // event keluar pantri dah dihantar
+        }
+
+        $this->state[$k] = ['i' => $s['i'], 'phase' => 'event', 'until' => 0.0, 'taskUntil' => 0.0, 'ping' => 0.0, 'pantry' => false];
+    }
+
+    /** Habis acara: sambung rutin di hentian yang sama, bergilir (0-5s). */
+    private function leaveEvent(int $k, float $now): void
+    {
+        $this->state[$k] = [
+            'i' => $this->state[$k]['i'], 'phase' => 'wait', 'pantry' => false, 'taskUntil' => 0.0, 'ping' => 0.0,
+            'until' => $now + ($this->rand)(0, 5) / $this->speed,
+        ];
+    }
+
+    /** Batal acara (briefing / tamat): rotator dilepas (OfficeDemo uruskan peringkat mereka). Staff aras dijadual semula oleh resume(). */
+    private function cancelEvents(): void
+    {
+        foreach ($this->party['rot'] ?? [] as $p) {
+            if ($this->partyRotatorHook) {
+                ($this->partyRotatorHook)($p['m']['sid'], false);
+            }
+        }
+        $this->launch = null;
+        $this->party = null;
+    }
+
+    private function indexOf(string $sid): ?int
+    {
+        foreach (self::STAFF as $k => $m) {
+            if ($m['sid'] === $sid) {
+                return $k;
+            }
+        }
+
+        return null;
     }
 
     // ---- dalaman ----
