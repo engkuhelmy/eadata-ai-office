@@ -13,7 +13,9 @@ use Closure;
  * dan HANYA ke kaunter, serah barang, lepas tu session_end (keluar ikut pintu). Barisnya dipadam ~25s kemudian
  * supaya senarai Team/Tamat 24 jam tak penuh. Paling ramai SATU penghantar pada satu masa.
  * Penyambut: tinggal di 'frontdesk', terima pakej, lepas penghantar pergi dia buat pusingan 3-4 hentian
- * (hentian pertama = meja penerima) menghantar arahan, kemudian pulang ke 'frontdesk'.
+ * (hentian pertama = meja penerima) menghantar arahan, kemudian pulang ke 'frontdesk'. Hentian bergilir ikut PLACES
+ * merangkumi seluruh bangunan (L1 -> Rooftop). Penghantar kekal di L1 sahaja.
+ * Pantri L1 had 2 orang: kalau pintu pantri disuntik ($pantryEnter / $pantryLeave) dan penuh, hentian pantri dilangkau.
  *
  * Dipacu tick() (dipanggil tiap saat dari loop OfficeDemo). Masa, rawak dan emit disuntik supaya boleh diuji
  * tanpa tidur: $emit(array $member, string $event, ?string $tool, ?string $target, ?string $department).
@@ -37,18 +39,31 @@ class ReceptionModule
         'dhl' => ['avatar' => 'dhl', 'label' => 'DHL Express', 'short' => 'DHL', 'verb' => 'Hantar parcel', 'names' => ['Ravi', 'Zul', 'Chong']],
     ];
 
-    /** Meja biasa setiap staff demo (penerima pakej / arahan). */
+    /** Meja biasa setiap staff demo (penerima pakej / arahan): staff IT (L2) + staff aras (FloorStaffModule). */
     public const RECIPIENTS = [
         'Aiman' => 'frontend', 'Balqis' => 'backend', 'Chandra' => 'research', 'Dewi' => 'deploy', 'Evan' => 'qa',
         'Nurul' => 'research', 'Sofea' => 'research', 'Aina' => 'research', 'Zack' => 'deploy',
         'Danish' => 'deploy', 'Mika' => 'deploy', 'Qila' => 'ops', 'Hakim' => 'ops',
+        'Datuk Hafiz' => 'ceo', 'Mei Ling' => 'cfo', 'Rajesh' => 'md', 'Puan Rosnah' => 'hod',
+        'Encik Kamal' => 'head_office', 'Farah' => 'marketing', 'Iqbal' => 'marketing',
+        'Amir' => 'sales', 'Liyana' => 'sales', 'Cikgu Azlan' => 'training', 'Intern Danial' => 'training',
+        'Intern Sara' => 'training',
     ];
 
-    /** Semua tempat yang Reni lawat bergilir-gilir. */
+    /** Semua tempat yang Reni lawat bergilir-gilir: seluruh bangunan, L1 -> Rooftop. */
     public const PLACES = [
-        'kanban' => 'Marketing Plan', 'frontend' => 'Coding (frontend)', 'backend' => 'Coding (backend)', 'qa' => 'Debugging',
-        'research' => 'Design Draft', 'deploy' => 'Support Call', 'ops' => 'Onboarding', 'boardroom' => 'Board Room',
-        'pantry' => 'Pantry', 'playroom' => 'Chill Room',
+        // L1
+        'training' => 'Training Area', 'sales' => 'Sales', 'client' => 'Client Space', 'meeting' => 'Meeting Room',
+        'pantry' => 'Pantry',
+        // L2
+        'marketing' => 'Marketing', 'kanban' => 'Marketing Plan', 'head_office' => 'Head of Department',
+        'frontend' => 'IT Frontend', 'backend' => 'IT Backend', 'qa' => 'IT QA', 'research' => 'IT Research',
+        'deploy' => 'IT DevOps', 'ops' => 'IT Ops', 'boardroom' => 'Big Meeting Room', 'coffee' => 'Big Pantry',
+        // L3
+        'ceo' => 'CEO Office', 'cfo' => 'CFO Office', 'md' => 'MD Office', 'hod' => 'HOD Office',
+        'playroom' => 'Chill Area', 'gaming' => 'Gaming Area', 'outdoor_work' => 'Outdoor Working',
+        // L4
+        'rooftop' => 'Rooftop',
     ];
 
     private const IDLE_ROUND_AFTER = 180;
@@ -88,12 +103,29 @@ class ReceptionModule
     /** @var array{stops: array<int, array{dept: string, text: string}>, i: int, open: bool, until: float}|null */
     private ?array $round = null;
 
-    public function __construct(Closure $emit, ?Closure $clock = null, ?Closure $rand = null, float $speed = 1.0)
-    {
+    /** @var (Closure(string): bool)|null pintu pantri L1 (had 2), dikongsi dengan OfficeDemo. Null = tiada had. */
+    private ?Closure $pantryEnter;
+
+    /** @var (Closure(string): void)|null */
+    private ?Closure $pantryLeave;
+
+    /** True semasa Reni pegang slot pantri. */
+    private bool $inPantry = false;
+
+    public function __construct(
+        Closure $emit,
+        ?Closure $clock = null,
+        ?Closure $rand = null,
+        float $speed = 1.0,
+        ?Closure $pantryEnter = null,
+        ?Closure $pantryLeave = null,
+    ) {
         $this->emit = $emit;
         $this->clock = $clock ?? fn (): float => microtime(true);
         $this->rand = $rand ?? fn (int $min, int $max): int => random_int($min, $max);
         $this->speed = max(0.1, $speed);
+        $this->pantryEnter = $pantryEnter;
+        $this->pantryLeave = $pantryLeave;
     }
 
     public static function receptionist(): array
@@ -131,6 +163,7 @@ class ReceptionModule
         if ($this->round !== null) {
             $this->round = null;
             $this->home(($this->clock)());
+            $this->leavePantry();
         }
     }
 
@@ -294,17 +327,39 @@ class ReceptionModule
         }
 
         if (! $r['open']) {
+            // Pantri penuh (had 2 orang): langkau hentian tu
+            while ($r['i'] < count($r['stops']) && $r['stops'][$r['i']]['dept'] === 'pantry'
+                && ! $this->inPantry && $this->pantryEnter !== null && ! ($this->pantryEnter)(self::SID)) {
+                $r['i']++;
+            }
+
             if ($r['i'] >= count($r['stops'])) {
                 $r = null;
                 $this->lastActivityAt = $now;
                 $this->home($now);
+                $this->leavePantry();
 
                 return;
             }
             $stop = $r['stops'][$r['i']];
             ($this->emit)(self::RECEPTIONIST, 'tool_start', $stop['text'], null, $stop['dept']);
+            if ($stop['dept'] === 'pantry') {
+                $this->inPantry = true;
+            } else {
+                $this->leavePantry(); // event keluar pantri dah dihantar, baru lepas slot
+            }
             $r['open'] = true;
             $r['until'] = $now + $this->span(6, 9);
+        }
+    }
+
+    private function leavePantry(): void
+    {
+        if ($this->inPantry) {
+            $this->inPantry = false;
+            if ($this->pantryLeave !== null) {
+                ($this->pantryLeave)(self::SID);
+            }
         }
     }
 

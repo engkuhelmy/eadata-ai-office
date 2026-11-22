@@ -16,7 +16,8 @@ class OfficeDemoTest extends TestCase
     private function runDemo(): void
     {
         // speed besar: satu kitaran siap dalam beberapa saat. Queue = sync dalam test.
-        $this->artisan('office:demo', ['--once' => true, '--speed' => 400, '--hours' => 1, '--no-reception' => true])->assertSuccessful();
+        // 13 staff IT sahaja (modul reception dan staff aras diuji berasingan)
+        $this->artisan('office:demo', ['--once' => true, '--speed' => 400, '--hours' => 1, '--no-reception' => true, '--no-floors' => true])->assertSuccessful();
     }
 
     public function test_demo_creates_thirteen_staff_from_four_vendors_with_friendly_names(): void
@@ -79,12 +80,17 @@ class OfficeDemoTest extends TestCase
 
         $departments = AgentEvent::query()->distinct()->pluck('department')->all();
 
-        foreach (['toilet', 'pantry', 'playroom', 'research', 'deploy', 'ops'] as $department) {
+        foreach (['toilet_2', 'pantry', 'research', 'deploy', 'ops'] as $department) {
             $this->assertContains($department, $departments, "tiada event di {$department}");
         }
+        // Rotator kerja di L2: guna tandas L2, bukan tandas L1
+        $this->assertNotContains('toilet', $departments);
+        // Chill di salah satu bilik chill (dipilih rawak setiap lawatan)
+        $this->assertNotEmpty(array_intersect(OfficeDemo::CHILL_ROOMS, $departments), 'tiada rotator ke bilik chill');
 
         // Rotator rehat dengan event 'idle' (bukan tool) di bilik masing-masing
-        $this->assertGreaterThan(0, AgentEvent::where('event', 'idle')->whereIn('department', ['toilet', 'pantry', 'playroom'])->count());
+        $rooms = array_merge(['toilet_2', 'pantry'], OfficeDemo::CHILL_ROOMS);
+        $this->assertGreaterThan(0, AgentEvent::where('event', 'idle')->whereIn('department', $rooms)->count());
     }
 
     /** Main balik event ikut id: kira berapa orang "dalam pantri" (department terakhir = pantry) pada setiap saat. */

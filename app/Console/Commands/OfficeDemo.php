@@ -4,20 +4,26 @@ namespace App\Console\Commands;
 
 use App\Jobs\ProcessAgentEvent;
 use App\Models\Agent;
+use App\Office\Demo\FloorStaffModule;
 use App\Office\Demo\ReceptionModule;
 use App\Office\NormalizedEvent;
 use DateTimeImmutable;
 use Illuminate\Console\Command;
 
 /**
- * Simulasi 13 staff demo (+ penyambut tetamu AI "Reni" = 14) yang jalan berjam-jam.
+ * Simulasi staff demo dalam bangunan 4 aras (docs/multifloor-spec.md) yang jalan berjam-jam:
+ * 13 staff IT (L2) + 12 staff aras (L1-L3) + penyambut tetamu AI "Reni" (L1) = 26.
  * 5 staff "team" ikut kitaran: board briefing ramai-ramai, ambil tugas di papan kanban, kerja di meja,
  * kemudian chill (sweep hantar ke chill room selepas idle 2 minit).
- * 8 staff "rotator" pusing tanpa henti: kerja -> tandas -> pantri -> chill room -> kerja, dalam semua fasa,
- * kecuali awal setiap kitaran bila semua 13 orang berkumpul di boardroom.
+ * 8 staff "rotator" pusing tanpa henti: kerja -> tandas L2 (toilet_2) -> pantri -> chill (playroom / gaming /
+ * outdoor_chill / rooftop, rawak setiap kali) -> kerja, dalam semua fasa, kecuali masa briefing.
+ * Modul staff aras (App\Office\Demo\FloorStaffModule, matikan dengan --no-floors): CEO/CFO/MD/HOD di L3, Head of
+ * Department + Marketing di L2, Sales + Training di L1, setiap seorang pusing ikut rutin peribadi.
+ * Briefing (awal setiap kitaran): team + rotator + staff aras berkumpul di boardroom (Big Meeting Room, L2).
  * Modul reception (App\Office\Demo\ReceptionModule, matikan dengan --no-reception): Reni duduk di kaunter reception,
  * penghantar Grab / ShopeeFood / J&T / DHL tekan loceng pintu, masuk ke kaunter sahaja, serah barang, lalu keluar
- * (sesi mereka ditamatkan dan dipadam ~25s kemudian). Lepas tiap penghantaran Reni pusing hantar arahan ke tempat lain.
+ * (sesi mereka ditamatkan dan dipadam ~25s kemudian). Lepas tiap penghantaran Reni pusing seluruh bangunan.
+ * Pantri L1 ('pantry') had 2 orang serentak: semua modul guna pintu pantri yang sama.
  * Sesi staff demo (session_id 'demo-*') TIDAK PERNAH ditamatkan: tiada session_end dan sweep skip mereka.
  * Pengecualian: penghantar ('demo-visit-*') tamat sendiri selepas serahan.
  */
@@ -27,9 +33,10 @@ class OfficeDemo extends Command
         {--hours=24 : Berapa jam demo berjalan}
         {--speed=1 : Pecutan masa (2 = dua kali ganda laju)}
         {--once : Satu kitaran sahaja}
-        {--no-reception : Matikan modul reception (penyambut tetamu + penghantar)}';
+        {--no-reception : Matikan modul reception (penyambut tetamu + penghantar)}
+        {--no-floors : Matikan modul staff aras (eksekutif L3, marketing L2, sales + training L1)}';
 
-    protected $description = 'Demo 24 jam: 13 staff + penyambut tetamu (briefing, kerja, tandas, pantri, chill room, penghantaran). Sesi staff tak ditamatkan.';
+    protected $description = 'Demo 24 jam, bangunan 4 aras: 25 staff + penyambut tetamu (briefing, kerja, tandas, pantri, chill, rutin eksekutif, penghantaran). Sesi staff tak ditamatkan.';
 
     /** Peringkat rotator: [nama, min saat, max saat, department (null = kerja di meja)]. */
     private const STAGE_WORK = 0;
@@ -38,12 +45,17 @@ class OfficeDemo extends Command
 
     private const STAGE_PANTRY = 2;
 
+    private const STAGE_CHILL = 3;
+
     private const STAGES = [
         ['work', 70, 100, null],
-        ['toilet', 25, 40, 'toilet'],
+        ['toilet', 25, 40, 'toilet_2'], // rotator kerja di L2: guna tandas L2
         ['pantry', 25, 40, 'pantry'],
-        ['chill', 60, 90, 'playroom'],
+        ['chill', 60, 90, 'playroom'], // bilik sebenar dipilih rawak dari CHILL_ROOMS setiap kali
     ];
+
+    /** Tempat chill rotator (dipilih rawak setiap lawatan). */
+    public const CHILL_ROOMS = ['playroom', 'gaming', 'outdoor_chill', 'rooftop'];
 
     /** Had keras: paling ramai 2 orang dalam pantri serentak. */
     public const PANTRY_CAPACITY = 2;
@@ -78,27 +90,39 @@ class OfficeDemo extends Command
 
     private ?ReceptionModule $reception = null;
 
+    private ?FloorStaffModule $floors = null;
+
     public function handle(): int
     {
         $this->speed = max(0.1, (float) $this->option('speed'));
+        $this->pantryClear(); // instance command boleh dipakai semula (test)
         $this->team = $this->buildTeam();
         $this->rotators = $this->buildRotators();
         $this->registerTeam();
         $this->initRotators();
 
-        $this->reception = null; // instance command boleh dipakai semula (test), jangan bawa modul lama
+        $emit = fn (array $m, string $event, ?string $tool, ?string $target, ?string $department) => $this->emit($m, $event, $tool, $target, $department);
+        $enter = fn (string $sid): bool => $this->pantryTryEnter($sid);
+        $leave = fn (string $sid) => $this->pantryLeave($sid);
+
+        $this->reception = null; // jangan bawa modul lama
         if (! $this->option('no-reception')) {
-            $this->reception = new ReceptionModule(
-                fn (array $m, string $event, ?string $tool, ?string $target, ?string $department) => $this->emit($m, $event, $tool, $target, $department),
-                speed: $this->speed,
-            );
+            $this->reception = new ReceptionModule($emit, speed: $this->speed, pantryEnter: $enter, pantryLeave: $leave);
             $this->reception->start();
+        }
+
+        $this->floors = null;
+        if (! $this->option('no-floors')) {
+            // Belum hantar event: briefing pertama terus tahan mereka, resume() lepas briefing
+            $this->floors = new FloorStaffModule($emit, speed: $this->speed, pantryEnter: $enter, pantryLeave: $leave);
+            $this->floors->start();
         }
 
         $endAt = microtime(true) + ((float) $this->option('hours') * 3600) / $this->speed;
         $cycle = 0;
 
-        $this->info('Demo mula: '.(count($this->team) + count($this->rotators) + ($this->reception ? 1 : 0)).' staff, '.$this->option('hours').' jam. Ctrl+C untuk henti.');
+        $total = count($this->briefingStaff()) + ($this->reception ? 1 : 0);
+        $this->info('Demo mula: '.$total.' staff, '.$this->option('hours').' jam. Ctrl+C untuk henti.');
 
         do {
             $cycle++;
@@ -113,6 +137,7 @@ class OfficeDemo extends Command
         } while (! $this->option('once') && microtime(true) < $endAt);
 
         $this->reception?->finish();
+        $this->floors?->finish();
         $this->info('Demo selesai. Sesi staff dibiar hidup (tiada session_end).');
 
         return self::SUCCESS;
@@ -166,7 +191,7 @@ class OfficeDemo extends Command
 
     /**
      * 8 staff rotator: meja di research/deploy/ops (Nurul/Sofea/Aina, Zack/Danish/Mika, Qila/Hakim),
-     * lepas tu tandas, pantri, chill room, ulang.
+     * lepas tu tandas L2, pantri, chill (playroom / gaming / outdoor_chill / rooftop), ulang.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -236,6 +261,12 @@ class OfficeDemo extends Command
     private function allStaff(): array
     {
         return array_merge($this->team, $this->rotators);
+    }
+
+    /** Semua yang hadir briefing: team + rotator + staff aras (kalau modul hidup). Reni kekal di kaunter. */
+    private function briefingStaff(): array
+    {
+        return array_merge($this->allStaff(), $this->floors ? FloorStaffModule::staff() : []);
     }
 
     /** Cipta staff dengan nama paparan + avatar supaya nampak dalam senarai Team dari awal. */
@@ -324,16 +355,25 @@ class OfficeDemo extends Command
 
     // ---- fasa ----
 
-    /** Semua 13 orang ke boardroom (ramai-ramai) dan kekal ~70 saat. Lepas tu rotator sambung di peringkat berbeza. */
+    /**
+     * Semua staff (team + rotator + staff aras) ke boardroom (Big Meeting Room L2) dan kekal ~70 saat.
+     * Lepas tu rotator sambung di peringkat berbeza dan staff aras sambung rutin di titik rawak.
+     */
     private function standup(): void
     {
         $this->rotHold = true;
-        $this->pantryClear(); // semua ke boardroom: kosongkan pantri
+        $this->floors?->hold();
+        // Semua ke boardroom: lepas slot pantri mereka (Reni, kalau tengah di pantri, kekal pegang slotnya)
+        $briefing = $this->briefingStaff();
+        foreach ($briefing as $m) {
+            $this->pantryLeave($m['sid']);
+        }
+        $this->pantryWaiting = [];
         $until = microtime(true) + 70 / $this->speed;
         $first = true;
 
         while (microtime(true) < $until) {
-            foreach ($this->allStaff() as $m) {
+            foreach ($briefing as $m) {
                 $this->emit($m, 'subagent_start', 'Task', 'Board briefing', 'boardroom');
                 if ($first) {
                     usleep((int) (700000 / $this->speed)); // masuk bergilir
@@ -349,6 +389,7 @@ class OfficeDemo extends Command
         foreach (array_keys($this->rotators) as $i) {
             $this->resumeStage($i, true);
         }
+        $this->floors?->resume();
     }
 
     /** Ambil tugas di papan kanban sebelum ke meja. */
@@ -391,6 +432,7 @@ class OfficeDemo extends Command
             }
             $this->tickRotators();
             $this->reception?->tick();
+            $this->floors?->tick();
             usleep((int) (1000000 / $this->speed));
         }
 
@@ -515,7 +557,7 @@ class OfficeDemo extends Command
                     // Pantri penuh: kekal di peringkat sekarang 6-10s lagi, tetap hantar event supaya last_event_at segar
                     $this->rot[$i]['until'] = $now + random_int(6, 10) / $this->speed;
                     $this->rot[$i]['ping'] = $now + 20 / $this->speed;
-                    $this->emit($m, 'idle', null, null, self::STAGES[$r['stage']][3]);
+                    $this->emit($m, 'idle', null, null, $r['room']);
 
                     continue;
                 }
@@ -528,7 +570,7 @@ class OfficeDemo extends Command
                 $this->workStep($m, $this->rot[$i], $now);
             } elseif ($now >= $r['ping']) {
                 // Event baru tiap ~20s supaya last_event_at segar (tak pernah senyap 100s)
-                $this->emit($m, 'idle', null, null, self::STAGES[$r['stage']][3]);
+                $this->emit($m, 'idle', null, null, $r['room']);
                 $this->rot[$i]['ping'] = $now + 20 / $this->speed;
             }
         }
@@ -539,10 +581,14 @@ class OfficeDemo extends Command
     {
         $now = microtime(true);
         [, $min, $max, $dept] = self::STAGES[$stage];
+        if ($stage === self::STAGE_CHILL) {
+            $dept = self::CHILL_ROOMS[array_rand(self::CHILL_ROOMS)]; // bilik chill rawak setiap lawatan
+        }
         $m = $this->rotators[$i];
 
         $this->rot[$i] = [
             'stage' => $stage,
+            'room' => $dept,
             'until' => $now + ($duration ?? random_int($min, $max) / $this->speed),
             'ping' => $now + 20 / $this->speed,
             'next' => $now + random_int(1, 4) / $this->speed,
@@ -553,7 +599,7 @@ class OfficeDemo extends Command
 
         if ($emit && $dept !== null) {
             // Habis kerja (masuk tandas): token Claude bertambah
-            $this->emit($m, 'idle', null, null, $dept, $stage === 1 ? $this->bumpUsage($m) : null);
+            $this->emit($m, 'idle', null, null, $dept, $stage === self::STAGE_TOILET ? $this->bumpUsage($m) : null);
         }
     }
 
@@ -601,6 +647,7 @@ class OfficeDemo extends Command
             usleep((int) min(1000000, max(0, ($until - microtime(true)) * 1000000)));
             $this->tickRotators();
             $this->reception?->tick();
+            $this->floors?->tick();
         }
     }
 }

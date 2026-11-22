@@ -117,7 +117,8 @@ class ReceptionModuleTest extends TestCase
         $this->assertEqualsWithDelta(13.5, $first[3]['at'] - $first[1]['at'], 1.6);
 
         // Bubble = teks tool, sebut brand + penerima
-        $this->assertMatchesRegularExpression('/^Hantar (makanan|parcel) .+ untuk \w+$/', $first[1]['tool']);
+        $this->assertMatchesRegularExpression('/^Hantar (makanan|parcel) .+ untuk .+$/', $first[1]['tool']);
+        $this->assertArrayHasKey($first[1]['target'], ReceptionModule::RECIPIENTS);
         $this->assertSame(explode(' untuk ', $first[1]['tool'])[1], $first[1]['target']);
 
         // Semasa hidup: Agent berdaftar dengan avatar jenama
@@ -330,7 +331,8 @@ class ReceptionModuleTest extends TestCase
     {
         $this->artisan('office:demo', ['--once' => true, '--speed' => 400, '--hours' => 1])->assertSuccessful();
 
-        $this->assertSame(14, Agent::where('session_id', 'not like', 'demo-visit-%')->count());
+        // 13 staff IT + 12 staff aras + Reni
+        $this->assertSame(26, Agent::where('session_id', 'not like', 'demo-visit-%')->count());
         $this->assertSame('recep', Agent::where('session_id', ReceptionModule::SID)->value('avatar'));
         $this->assertSame(0, Agent::where('session_id', 'like', 'demo-visit-%')->count(), 'penghantar dibersihkan bila demo tamat');
         // Reni tak ikut briefing semua staff (kekal di mejanya)
@@ -338,10 +340,45 @@ class ReceptionModuleTest extends TestCase
         $this->assertSame(0, $reni->events()->where('event', 'subagent_start')->count());
 
         Agent::query()->delete();
-        $this->artisan('office:demo', ['--once' => true, '--speed' => 400, '--hours' => 1, '--no-reception' => true])->assertSuccessful();
+        $this->artisan('office:demo', ['--once' => true, '--speed' => 400, '--hours' => 1, '--no-reception' => true, '--no-floors' => true])->assertSuccessful();
 
         $this->assertSame(13, Agent::count());
         $this->assertSame(0, Agent::where('session_id', ReceptionModule::SID)->count());
+    }
+
+    public function test_receptionist_round_spans_the_whole_building_and_recipients_include_floor_staff(): void
+    {
+        foreach (['training', 'sales', 'client', 'marketing', 'head_office', 'ceo', 'cfo', 'md', 'hod', 'gaming', 'outdoor_work', 'rooftop'] as $dept) {
+            $this->assertArrayHasKey($dept, ReceptionModule::PLACES);
+        }
+        foreach (array_merge(array_keys(ReceptionModule::PLACES), ReceptionModule::RECIPIENTS) as $dept) {
+            $this->assertContains($dept, DepartmentRouter::DEPARTMENTS);
+        }
+        foreach (\App\Office\Demo\FloorStaffModule::staff() as $m) {
+            $this->assertSame($m['routine'][0][0], ReceptionModule::RECIPIENTS[$m['name']] ?? null, "penerima {$m['name']}");
+        }
+        $this->assertCount(25, ReceptionModule::RECIPIENTS);
+    }
+
+    public function test_receptionist_skips_the_pantry_when_it_is_full(): void
+    {
+        mt_srand(7);
+        $log = [];
+        $m = new ReceptionModule(
+            function (array $m, string $event, ?string $tool, ?string $target, ?string $department) use (&$log): void {
+                $log[] = $department;
+            },
+            fn (): float => $this->t,
+            fn (int $min, int $max): int => mt_rand($min, $max),
+            1.0,
+            fn (string $sid): bool => false, // pantri sentiasa penuh
+            fn (string $sid) => null,
+        );
+        $m->start();
+        $this->advance($m, 3600);
+
+        $this->assertNotContains('pantry', $log);
+        $this->assertContains('rooftop', $log);
     }
 
     public function test_new_reception_departments_and_avatars_are_valid(): void
@@ -349,6 +386,6 @@ class ReceptionModuleTest extends TestCase
         $this->assertContains('reception', DepartmentRouter::DEPARTMENTS);
         $this->assertContains('frontdesk', DepartmentRouter::DEPARTMENTS);
         $this->assertSame('reception', (new DepartmentRouter)->route('tool_start', explicit: 'reception'));
-        $this->assertSame(['recep', 'grab', 'shopee', 'jnt', 'dhl'], array_slice(Agent::AVATARS, 4));
+        $this->assertSame(['recep', 'grab', 'shopee', 'jnt', 'dhl'], array_slice(Agent::AVATARS, 4, 5));
     }
 }

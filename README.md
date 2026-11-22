@@ -46,13 +46,19 @@ Buang `--dry-run` untuk pasang. `--uninstall` untuk buang. Codex perlu `/hooks` 
 
 ## Demo 24 jam
 
-`php artisan office:demo` (atau `scripts\start-demo.ps1`) jalankan 13 staff demo (briefing boardroom, kerja, tandas, pantri maks 2 orang, chill room) dan **modul reception**:
+`php artisan office:demo` (atau `scripts\start-demo.ps1`) jalankan demo dalam bangunan 4 aras (L1, L2, L3, Rooftop; kontrak di `docs/multifloor-spec.md`). Jumlah staff demo = **26**: 13 staff IT + 12 staff aras + penyambut tetamu Reni.
 
-- Penyambut tetamu AI **Reni** (`demo-reception`, avatar `recep`) duduk di kaunter reception (department `frontdesk`). Jumlah staff demo = 14.
-- Penghantar Grab, ShopeeFood, J&T dan DHL (`demo-visit-<brand>-<n>`) tiba bergilir satu demi satu: muncul di pintu (`door`), loceng berbunyi, masuk ke kaunter sahaja (`reception`), serah makanan/parcel, kemudian keluar (`session_end`). Barisnya dipadam ~25s selepas keluar.
-- Lepas tiap serahan Reni buat pusingan 3-4 hentian (mula di meja penerima) hantar arahan, kemudian pulang ke `frontdesk`. Tiada penghantaran 3 minit = Reni buat pusingan sendiri.
-- Matikan modul: `php artisan office:demo --no-reception`.
-- Sesi staff `demo-*` tak pernah ditamatkan; hanya penghantar (`demo-visit-*`) tamat sendiri. Logik di `app/Office/Demo/ReceptionModule.php`.
+- **Staff IT (L2, 13 orang)**: 5 staff team (kanban, kerja di meja, minum di pantri) dan 8 rotator (kerja -> tandas L2 `toilet_2` -> pantri -> chill rawak di `playroom` / `gaming` / `outdoor_chill` / `rooftop`).
+- **Briefing**: awal setiap kitaran team + rotator + staff aras (25 orang) berkumpul di `boardroom` (Big Meeting Room, L2). Reni kekal di kaunter.
+- **Modul staff aras** (`app/Office/Demo/FloorStaffModule.php`, 12 orang): setiap seorang pusing ikut rutin peribadi (bubble = teks tugas, cth. "Semak bajet Q4"; ping `idle` tiap ~20s supaya sweep tak pindahkan mereka).
+  - L3: CEO **Datuk Hafiz**, CFO **Mei Ling**, MD **Rajesh**, HOD **Puan Rosnah** (avatar `exec` / `exec_w`): pejabat sendiri + lawatan (head_office, boardroom, sales, big pantry, IT, outdoor_work, gaming, marketing, training, outdoor_chill, rooftop).
+  - L2: Head of Department **Encik Kamal** (head_office, marketing, qa, kanban); Marketing **Farah** dan **Iqbal** (marketing, kanban, mesyuarat klien L1, big pantry, outdoor_chill).
+  - L1: Sales **Amir** dan **Liyana** (sales, client, meeting, pantry); trainer **Cikgu Azlan** (training, meeting); intern **Danial** dan **Sara** (training, toilet, client).
+- **Pantri L1** maks 2 orang serentak: team, rotator, staff aras dan Reni kongsi pintu yang sama (penuh = tunggu / langkau).
+- **Modul reception** (`app/Office/Demo/ReceptionModule.php`): Reni (`demo-reception`, avatar `recep`) di kaunter (`frontdesk`). Penghantar Grab, ShopeeFood, J&T dan DHL (`demo-visit-<brand>-<n>`) tiba satu demi satu di L1: pintu (`door`), loceng, kaunter sahaja (`reception`), serah barang, keluar (`session_end`); barisnya dipadam ~25s kemudian. Lepas tiap serahan Reni buat pusingan 3-4 hentian (mula di meja penerima) merentasi seluruh bangunan, kemudian pulang ke `frontdesk`. Tiada penghantaran 3 minit = Reni buat pusingan sendiri.
+- Pilihan: `--hours=24`, `--speed=1`, `--once`, `--no-reception` (tanpa Reni + penghantar), `--no-floors` (tanpa 12 staff aras).
+- Sesi staff `demo-*` tak pernah ditamatkan; hanya penghantar (`demo-visit-*`) tamat sendiri.
+- Kunci department baharu (`training`, `sales`, `client`, `marketing`, `head_office`, `toilet_2`, `outdoor_chill`, `ceo`, `cfo`, `md`, `hod`, `gaming`, `outdoor_work`, `rooftop`) boleh di-pin oleh owner. Routing automatik hook masih guna kunci lama.
 
 ## Ujian
 

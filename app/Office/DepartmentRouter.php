@@ -10,6 +10,12 @@ class DepartmentRouter
         'boardroom', 'pantry', 'toilet',
         // Kaunter reception: tetamu/penghantar berdiri di depan kaunter, penyambut tetamu di belakang (frontdesk).
         'reception', 'frontdesk',
+        // Bangunan 4 aras (docs/multifloor-spec.md). Routing automatik masih guna kunci lama di atas sahaja;
+        // kunci ini untuk demo, pin oleh owner dan department eksplisit (generic).
+        'training', 'sales', 'client', // L1
+        'marketing', 'head_office', 'toilet_2', 'outdoor_chill', // L2
+        'ceo', 'cfo', 'md', 'hod', 'gaming', 'outdoor_work', // L3
+        'rooftop', // L4
     ];
 
     private const FRONTEND_EXT = ['vue', 'tsx', 'jsx', 'css', 'scss', 'html'];

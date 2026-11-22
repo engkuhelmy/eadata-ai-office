@@ -1,21 +1,48 @@
 import '../bootstrap';
 import Phaser from 'phaser';
 import OfficeScene from './OfficeScene';
-import { CANVAS } from './layout';
+import { CANVAS, FLOORS } from './layout';
 import * as store from './state';
 import * as ui from './ui';
 import { connectRealtime } from './realtime';
 import { initPanels } from './panels';
 import { initNotify, checkTransitions } from './notify';
 import { initTv, isTv } from './tv';
+import { lsGet, lsSet } from './util';
+
+const VIEW_KEY = 'office.view';
+const TV_CYCLE_MS = 15000;
+
+const scene = new OfficeScene();
+let counts = ui.countByFloor([]);
+
+// Pilih staff: buka butiran dan zoom ke aras staff itu
+const openAgent = (id) => {
+    ui.showDetail(id);
+    scene.focusAgent(id);
+};
+
+let tvTimer = null;
+const setView = (view) => {
+    scene.setView(view);
+    if (!isTv) lsSet(VIEW_KEY, String(view));
+    if (isTv) restartTvCycle();
+};
 
 initTv();
 ui.initFilters();
-initNotify({ openAgent: (id) => ui.showDetail(id) });
-if (!isTv) initPanels({ onOpenAgent: (id) => ui.showDetail(id) });
+ui.setOnFocus((id) => scene.focusAgent(id));
+ui.initFloorTabs({ onView: setView });
+initNotify({ openAgent });
+if (!isTv) initPanels({ onOpenAgent: openAgent });
 
-const scene = new OfficeScene();
 scene.onSelect = (id) => ui.showDetail(id);
+scene.onViewChange = (view) => ui.setActiveView(view);
+
+// Paparan awal: bangunan (TV), atau paparan terakhir pengguna
+const saved = isTv ? 'building' : lsGet(VIEW_KEY, 'building');
+scene.setView(saved === 'building' ? 'building' : Number(saved));
+ui.setActiveView(scene.view);
 
 window.__officeGame = new Phaser.Game({
     type: Phaser.AUTO,
@@ -30,13 +57,41 @@ window.__officeGame = new Phaser.Game({
     scene: [scene],
 });
 
+// Saiz bekas berubah (putar telefon, sidebar, tab dipapar semula): muat semula skala canvas
+const refreshScale = () => window.__officeGame.scale.refresh();
+if ('ResizeObserver' in window) {
+    new ResizeObserver(refreshScale).observe(document.getElementById('office-canvas'));
+}
+window.addEventListener('resize', refreshScale);
+window.addEventListener('orientationchange', refreshScale);
+
 store.subscribe((snap) => {
+    counts = ui.countByFloor(snap.agents);
     ui.renderTeam(snap.agents, snap.ended);
     ui.renderFeed(snap.events);
     ui.refreshDetail();
+    ui.updateFloorTabs(counts);
     checkTransitions(snap.agents, snap.loaded);
-    scene.render(snap.agents);
+    scene.setFloorCounts(counts);
+    scene.render(snap.agents, { loaded: snap.loaded });
 });
+
+// Mod TV: pusing Bangunan -> L1 -> L2 -> L3 -> Rooftop (~15s setiap satu), langkau aras kosong
+function restartTvCycle() {
+    clearInterval(tvTimer);
+    const order = ['building', ...FLOORS.map((f) => f.id)];
+    tvTimer = setInterval(() => {
+        const at = Math.max(0, order.indexOf(scene.view));
+        for (let k = 1; k <= order.length; k++) {
+            const v = order[(at + k) % order.length];
+            if (v === 'building' || (counts[v] ?? 0) > 0) {
+                scene.setView(v);
+                break;
+            }
+        }
+    }, TV_CYCLE_MS);
+}
+if (isTv) restartTvCycle();
 
 connectRealtime({
     onSnapshot: (data) => store.setSnapshot(data),

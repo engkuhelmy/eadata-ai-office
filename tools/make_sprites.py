@@ -28,10 +28,12 @@ OL = (58, 36, 20, 255)
 FW, FH = 32, 48
 
 # Gaya staff: default (asal), woman, hiphop, genz. Nama fail: default = staff_*.png (legacy).
-STYLES = ('default', 'woman', 'hiphop', 'genz', 'recep', 'grab', 'shopee', 'jnt', 'dhl')
+STYLES = ('default', 'woman', 'hiphop', 'genz', 'recep', 'grab', 'shopee', 'jnt', 'dhl', 'exec', 'exec_w')
 SHEET_PREFIX = {'default': 'staff', 'woman': 'staff_woman', 'hiphop': 'staff_hiphop', 'genz': 'staff_genz',
                 'recep': 'staff_recep', 'grab': 'staff_grab', 'shopee': 'staff_shopee', 'jnt': 'staff_jnt',
-                'dhl': 'staff_dhl'}
+                'dhl': 'staff_dhl', 'exec': 'staff_exec', 'exec_w': 'staff_exec_w'}
+# Tint shirt tetap untuk gaya eksekutif (sut / blazer); dipakai oleh preview, enjin guna nilai sama
+STYLE_TINT = {'exec': (0x1f, 0x2a, 0x44), 'exec_w': (0x3b, 0x2a, 0x4a)}
 # Tint shirt masa runtime untuk gaya vendor/pelawat (juga dipakai oleh preview)
 VENDOR_TINT = {'recep': (0x42, 0x85, 0xf4), 'grab': (0x00, 0xb1, 0x4f), 'shopee': (0xee, 0x4d, 0x2d),
                'jnt': (0xd5, 0x20, 0x2a), 'dhl': (0xff, 0xcc, 0x00)}
@@ -61,6 +63,13 @@ FIXED = {
     'jnt_red': {0: (150, 18, 28, 255), 1: (213, 32, 42, 255), 2: (244, 92, 96, 255)},
     'dhl_yellow': {0: (214, 160, 0, 255), 1: (255, 204, 0, 255), 2: (255, 232, 118, 255)},
     'dhl_red': {0: (150, 12, 22, 255), 1: (212, 5, 17, 255), 2: (240, 72, 72, 255)},
+    # --- role eksekutif (exec, exec_w) ---
+    'tie': {0: (140, 20, 30, 255), 1: (200, 36, 46, 255), 2: (240, 96, 96, 255)},
+    'trousers': {0: (34, 36, 44, 255), 1: (50, 53, 64, 255), 2: (72, 76, 90, 255)},
+    'oxford': {0: (12, 10, 12, 255), 1: (34, 30, 34, 255), 2: (130, 130, 144, 255)},
+    'pearl': {1: (226, 222, 210, 255), 2: (255, 255, 248, 255)},
+    'pencil': {0: (62, 62, 74, 255), 1: (88, 88, 102, 255), 2: (116, 116, 132, 255)},
+    'pumps': {0: (16, 12, 16, 255), 1: (40, 30, 40, 255), 2: (150, 130, 150, 255)},
 }
 TINT_LEVELS = {
     'skin': {0: 0.80, 1: 1.0, 2: 1.0},
@@ -523,6 +532,11 @@ def extras_front(b, style, y0):
                 b.put(x, y0 + row, 'hair', sh)
         for x in (11, 21):
             b.put(x, y0 + 15, 'hair', 0)
+    elif style == 'exec_w':  # rambut paras bahu, hujung melentik ke luar
+        for x, sh in ((10, 0), (11, 1), (12, 2), (20, 2), (21, 1), (22, 0)):
+            b.put(x, y0 + 11, 'hair', sh)
+        for x, sh in ((9, 0), (10, 1), (11, 0), (21, 0), (22, 1), (23, 0)):
+            b.put(x, y0 + 12, 'hair', sh)
 
 
 def figure(dy=0, seated=False, lx=0, rx=0, llift=0, rlift=0, al=0, ar=0, typing=None, pose=None, style='default'):
@@ -695,6 +709,27 @@ def figure_back(typing=0, style='default'):
                 b.put(x, yt + row, 'shirt', shade)
         for x in range(13, 20):
             b.put(x, yt, 'shirt', 2)
+    elif style == 'exec':  # jaket sut: kolar kemeja putih + belahan (vent) di belakang
+        for row in range(14):
+            for x in range(11, 21):
+                b.put(x, yt + row, 'shirt', 2 if x <= 12 else 0 if x >= 19 else 1)
+        for x in range(13, 20):
+            b.put(x, yt + 1, 'shirt', 0)
+        for x in range(14, 19):
+            b.put(x, yt, 'white', 1)
+        for row in (11, 12, 13):
+            b.put(16, yt + row, 'shirt', 0)
+    elif style == 'exec_w':  # blazer + skirt pensel
+        for row in range(11):
+            xs = range(11, 21) if row <= 4 else range(12, 20)
+            for x in xs:
+                shade = 2 if x <= 12 else 0 if x >= 19 else 1
+                if row >= 9:
+                    shade = 0
+                b.put(x, yt + row, 'shirt', shade)
+        for row in range(11, 14):
+            for x in range(12, 20):
+                b.put(x, yt + row, 'pencil', 0 if row == 11 else 2 if x <= 13 else 0 if x >= 18 else 1)
     else:  # genz: hood nampak dari belakang
         for row in range(14):
             for x in range(10, 22):
@@ -719,6 +754,8 @@ def figure_back(typing=0, style='default'):
                 b.put(x0 + i, yt + 1 + row - lift, 'skin' if skin else 'shirt', 1 if skin else shades[i])
     if style == 'woman':
         back_hair_fall(b, y0)
+    elif style == 'exec_w':
+        back_hair_bob(b, y0)
 
     return add_outline(b)
 
@@ -963,6 +1000,170 @@ for _s in VENDOR_STYLES:
     HEAD[_s] = head_recep if _s == 'recep' else (lambda b, y0, s=_s: head_rider(b, y0, s))
     TORSO[_s] = torso_recep if _s == 'recep' else (lambda b, yt, seated, s=_s: torso_rider(b, yt, seated, s))
     LEGS[_s] = legs_recep if _s == 'recep' else legs_rider(LEGS_ROLE[_s])
+
+
+# ---- gaya eksekutif: exec (sut + tali leher), exec_w (blazer + skirt pensel) ---------------------
+# Jaket/blazer = lapisan shirt (tint runtime 0x1f2a44 / 0x3b2a4a). Kolar putih, tali leher merah,
+# seluar, kasut, mutiara dan skirt berada dalam lapisan fixed.
+
+def head_exec(b, y0):
+    head_shape(b, y0)
+    # rambut pendek kemas, belah tepi (garis belah pada x=14), sideburn pendek
+    for x in range(12, 21):
+        b.put(x, y0, 'hair', 0 if x == 14 else 2 if 15 <= x <= 18 else 1)
+    for x in range(11, 22):
+        b.put(x, y0 + 1, 'hair', 0 if x in (11, 14, 21) else 2 if 16 <= x <= 19 else 1)
+        b.put(x, y0 + 2, 'hair', 0 if x in (11, 21) else 2 if x in (15, 16) else 1)
+    for x, sh in ((11, 0), (12, 1), (13, 1), (20, 1), (21, 0)):
+        b.put(x, y0 + 3, 'hair', sh)
+    b.put(11, y0 + 4, 'hair', 0)
+    b.put(21, y0 + 4, 'hair', 0)
+    for x in (13, 14, 18, 19):  # kening
+        b.put(x, y0 + 4, 'hair', 0)
+    b.put(14, y0 + 5, 'eyes')
+    b.put(18, y0 + 5, 'eyes')
+    for x in (15, 16, 17):
+        b.put(x, y0 + 8, 'mouth')
+
+
+def head_exec_w(b, y0):
+    head_shape(b, y0, jaw_dark=False)
+    # rambut paras bahu, belah tepi kanan (x=17), bang disisir ke kiri
+    for x in range(12, 21):
+        b.put(x, y0, 'hair', 0 if x == 17 else 2 if x <= 16 else 1)
+    for row in (1, 2):
+        for x in range(10, 23):
+            if x in (10, 22):
+                sh = 0
+            elif row == 1:
+                sh = 0 if x == 17 else 2 if 12 <= x <= 16 else 1
+            else:
+                sh = 2 if 13 <= x <= 15 else 1
+            b.put(x, y0 + row, 'hair', sh)
+    for x in range(11, 18):
+        b.put(x, y0 + 3, 'hair', 2 if x <= 13 else 1)
+    for x in (20, 21):
+        b.put(x, y0 + 3, 'hair', 1)
+    for x, sh in ((10, 0), (11, 1), (12, 1), (13, 1), (20, 1), (21, 1), (22, 0)):
+        b.put(x, y0 + 4, 'hair', sh)
+    for row in range(5, 11):
+        for x, sh in ((10, 0), (11, 1), (12, 2), (20, 2), (21, 1), (22, 0)):
+            b.put(x, y0 + row, 'hair', sh)
+    for x in (13, 14, 18, 19):
+        b.put(x, y0 + 5, 'eyes')
+    for x in (15, 16, 17):
+        b.put(x, y0 + 8, 'lips')
+    b.put(12, y0 + 8, 'pearl', 2)  # anting-anting mutiara
+    b.put(20, y0 + 8, 'pearl', 1)
+
+
+def torso_exec(b, yt, seated):
+    for x in (15, 16, 17):
+        b.put(x, yt - 1, 'skin', 0)
+    for row in range(14):
+        for x in range(11, 21):
+            shade = 2 if x <= 12 else 0 if x >= 19 else 1
+            if row >= 12:
+                shade = 0
+            b.put(x, yt + row, 'shirt', shade)
+    # kemeja putih dalam bukaan V
+    for x, y, sh in ((14, 0, 2), (15, 0, 2), (17, 0, 1), (18, 0, 1), (15, 1, 2), (17, 1, 1), (15, 2, 2), (17, 2, 1),
+                     (15, 3, 2), (17, 3, 1)):
+        b.put(x, yt + y, 'white', sh)
+    # tali leher merah
+    for y, sh in ((0, 1), (1, 2), (2, 1), (3, 1), (4, 1), (5, 0)):
+        b.put(16, yt + y, 'tie', sh)
+    # lapel (garis gelap + kilau)
+    for x, y in ((13, 0), (14, 1), (14, 2), (14, 3), (15, 4), (19, 0), (18, 1), (18, 2), (18, 3), (17, 4)):
+        b.put(x, yt + y, 'shirt', 0)
+    b.put(13, yt + 1, 'shirt', 2)
+    b.put(13, yt + 2, 'shirt', 2)
+    b.put(18, yt + 5, 'white', 2)  # sapu tangan poket
+    b.put(19, yt + 5, 'white', 1)
+    b.put(16, yt + 8, 'shirt', 0)  # butang
+    if not seated:
+        b.put(16, yt + 11, 'shirt', 0)
+
+
+def torso_exec_w(b, yt, seated):
+    for x in (15, 16, 17):
+        b.put(x, yt - 1, 'skin', 0)
+    for row in range(11):
+        xs = range(11, 21) if row <= 4 else range(12, 20)
+        for x in xs:
+            shade = 2 if x <= 12 else 0 if x >= 19 else 1
+            if row >= 9:
+                shade = 0 if x >= 14 else 1
+            b.put(x, yt + row, 'shirt', shade)
+    # blaus putih + rantai mutiara
+    for x, y, role, sh in ((14, 0, 'white', 2), (15, 0, 'skin', 1), (16, 0, 'skin', 1), (17, 0, 'skin', 1),
+                           (18, 0, 'white', 1), (14, 1, 'white', 2), (15, 1, 'pearl', 2), (16, 1, 'skin', 1),
+                           (17, 1, 'pearl', 1), (18, 1, 'white', 1), (15, 2, 'white', 2), (16, 2, 'pearl', 2),
+                           (17, 2, 'white', 1), (16, 3, 'white', 1)):
+        b.put(x, yt + y, role, sh)
+    for x, y in ((13, 1), (19, 1), (14, 2), (18, 2), (15, 3), (17, 3), (16, 4)):
+        b.put(x, yt + y, 'shirt', 0)
+    b.put(13, yt + 2, 'shirt', 2)
+    b.put(16, yt + 7, 'shirt', 0)  # butang
+    # skirt pensel kelabu (fixed) hingga lutut, mengecil di bawah
+    last = 13 if seated else 18
+    for row in range(11, last + 1):
+        x0, x1 = (12, 19) if row <= 16 else (13, 18)
+        for x in range(x0, x1 + 1):
+            shade = 2 if x <= x0 + 1 else 0 if x >= x1 else 1
+            if row == last and not seated:
+                shade = 0
+            b.put(x, yt + row, 'pencil', shade)
+
+
+def legs_exec(b, lx, rx, llift, rlift):
+    for x0, off, lift, shades in ((11, lx, llift, (2, 1, 1, 1, 0)), (16, rx, rlift, (1, 1, 1, 1, 0))):
+        bottom = 43 - lift
+        for y in range(32, bottom + 1):
+            for i in range(5):
+                b.put(x0 + off + i, y, 'trousers', shades[i])
+        left = x0 == 11
+        for y in range(bottom + 1, bottom + 4):
+            for i in range(-1 if left else 0, 6 if not left else 5):
+                b.put(x0 + off + i, y, 'oxford', 0 if y == bottom + 3 else 1)
+        b.put(x0 + off + (0 if left else 4), bottom + 2, 'oxford', 2)  # kilat kasut
+
+
+def legs_exec_w(b, lx, rx, llift, rlift):
+    for x0, off, lift, shades in ((12, lx, llift, (2, 1, 0)), (17, rx, rlift, (2, 1, 0))):
+        bottom = 43 - lift
+        for y in range(32, bottom + 1):
+            for i in range(3):
+                b.put(x0 + off + i, y, 'skin', shades[i] if y < bottom - 1 else 1)
+        left = x0 == 12
+        for x in range(x0, x0 + 3):
+            b.put(x + off, bottom + 1, 'pumps', 1)
+        lo, hi = (x0 - 1, x0 + 2) if left else (x0, x0 + 3)
+        for x in range(lo, hi + 1):
+            b.put(x + off, bottom + 2, 'pumps', 1)
+        b.put((lo if left else hi) + off, bottom + 2, 'pumps', 2)
+        for x in range(lo + 1, hi):
+            b.put(x + off, bottom + 3, 'pumps', 0)
+
+
+def back_hair_bob(b, y0):
+    """Rambut paras bahu exec_w dari belakang (lukis selepas badan)."""
+    for row in range(9, 14):
+        x0, x1 = (11, 21) if row <= 11 else (10, 22)
+        for x in range(x0, x1 + 1):
+            sh = 2 if x <= x0 + 1 else 0 if x >= x1 - 1 else 1
+            if row == 13:
+                sh = 0
+            b.put(x, y0 + row, 'hair', sh)
+
+
+HEAD.update({'exec': head_exec, 'exec_w': head_exec_w})
+TORSO.update({'exec': torso_exec, 'exec_w': torso_exec_w})
+LEGS.update({'exec': legs_exec, 'exec_w': legs_exec_w})
+BACK_HEAD.update({'exec': back_head_default, 'exec_w': back_head_woman})
+for _s in ('exec', 'exec_w'):
+    ARM[_s] = dict(ARM['default'])
+    BACK_ARM[_s] = dict(BACK_ARM['default'])
 
 
 # ---- barang bawaan ----------------------------------------------------------------
@@ -2127,6 +2328,818 @@ def chiller_redbull():
     return img
 
 
+# ---------------------------------------------------------------- bangunan 4 aras (sprite baharu)
+# Pembantu isometrik: (u, v) = koordinat dalam tile (u sepanjang paksi c, v sepanjang paksi r, 0..1),
+# z = tinggi piksel. Tile duduk di bahagian bawah kanvas: bucu atas (28, H-28), bucu bawah (28, H).
+
+TEAK = dict(top=(184, 132, 86, 255), left=(152, 104, 64, 255), right=(122, 82, 50, 255), hi=(214, 170, 120, 255))
+WALNUT = dict(top=(104, 64, 42, 255), left=(74, 44, 28, 255), right=(54, 32, 20, 255), hi=(156, 110, 78, 255))
+STEEL = (178, 184, 196, 255)
+STEEL_D = (110, 116, 130, 255)
+GOLD = (214, 172, 72, 255)
+
+
+def isop(H, u, v, z=0.0):
+    return (int(math.floor(28 + (u - v) * 28 + 0.5)), int(math.floor(H - 28 + (u + v) * 14 - z + 0.5)))
+
+
+def ibox(d, H, u0, u1, v0, v1, z0, z1, top, left, right, hi=None, ol=OL):
+    """Peti isometrik selari paksi: muka kiri (v=v1), muka kanan (u=u1), atas (z1)."""
+    p = lambda u, v, z: isop(H, u, v, z)
+    d.polygon([p(u0, v1, z0), p(u1, v1, z0), p(u1, v1, z1), p(u0, v1, z1)], fill=left, outline=ol)
+    d.polygon([p(u1, v1, z0), p(u1, v0, z0), p(u1, v0, z1), p(u1, v1, z1)], fill=right, outline=ol)
+    d.polygon([p(u0, v0, z1), p(u1, v0, z1), p(u1, v1, z1), p(u0, v1, z1)], fill=top, outline=ol)
+    if hi:
+        a, b, c = p(u0, v1, z1), p(u0, v0, z1), p(u1, v0, z1)
+        d.line([(a[0] + 2, a[1]), (b[0], b[1] + 1), (c[0] - 2, c[1])], fill=hi)
+
+
+def paste_L(img, flat, x0, y0):
+    """Tampal imej rata pada satah selari paksi c (muka kiri, turun ke kanan 1px / 2px)."""
+    px = flat.load()
+    for fx in range(flat.width):
+        for fy in range(flat.height):
+            c = px[fx, fy]
+            x, y = x0 + fx, y0 + fy + fx // 2
+            if c[3] and 0 <= x < img.width and 0 <= y < img.height:
+                img.putpixel((x, y), c)
+
+
+def paste_R(img, flat, x0, y0):
+    """Tampal imej rata pada satah selari paksi r (muka kanan, naik ke kanan 1px / 2px)."""
+    px = flat.load()
+    for fx in range(flat.width):
+        for fy in range(flat.height):
+            c = px[fx, fy]
+            x, y = x0 + fx, y0 + fy - (fx + 1) // 2
+            if c[3] and 0 <= x < img.width and 0 <= y < img.height:
+                img.putpixel((x, y), c)
+
+
+def outline_alpha(img, color=OL):
+    """Garis luar 1px di sekeliling piksel legap (untuk bentuk organik: daun, beanbag, payung)."""
+    px = img.load()
+    w, h = img.size
+    solid = {(x, y) for y in range(h) for x in range(w) if px[x, y][3] > 0}
+    for y in range(h):
+        for x in range(w):
+            if (x, y) not in solid and any((x + dx, y + dy) in solid for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                px[x, y] = color
+    return img
+
+
+def legs4(d, H, pts, z, w=0.03, col=STEEL_D):
+    """Kaki kecil di (u, v) yang diberi, dilukis belakang dulu."""
+    for u, v in sorted(pts, key=lambda t: t[0] + t[1]):
+        ibox(d, H, u - w, u + w, v - w, v + w, 0, z, col, shade(col, 0.85), shade(col, 0.7))
+
+
+def laptop(d, H, u0, u1, v0, v1, z, body=(206, 210, 218, 255), screen=(110, 176, 238, 255)):
+    """Laptop terbuka: tapak nipis + skrin menghadap +r (ke arah penonton kiri-bawah)."""
+    p = lambda u, v, zz: isop(H, u, v, zz)
+    ibox(d, H, u0, u1, v0, v1, z, z + 1, body, shade(body, 0.85), shade(body, 0.7))
+    d.polygon([p(u0, v0, z + 1), p(u1, v0, z + 1), p(u1, v0, z + 10), p(u0, v0, z + 10)], fill=(46, 50, 62, 255), outline=OL)
+    d.polygon([p(u0 + 0.04, v0, z + 3), p(u1 - 0.04, v0, z + 3), p(u1 - 0.04, v0, z + 8), p(u0 + 0.04, v0, z + 8)], fill=screen)
+    a = p(u0 + 0.06, v0, z + 7)
+    d.point((a[0] + 1, a[1]), fill=(230, 244, 255, 255))
+    d.point((a[0] + 2, a[1] + 1), fill=(230, 244, 255, 255))
+    d.line([p(u0 + 0.06, (v0 + v1) / 2, z + 1), p(u1 - 0.06, (v0 + v1) / 2, z + 1)], fill=shade(body, 0.75))
+
+
+def stairs():
+    """Tangga lurus naik ke belakang-kanan (arah -r): tapak maple, riser putih + jalur kuning,
+    dinding sisi (stringer) putih dengan penutup biru, susur tangan di kedua-dua sisi."""
+    H = 100
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    N, rh = 7, 8
+    U0, U1 = 0.05, 0.82
+    riser, rside = (250, 250, 252, 255), (204, 208, 216, 255)
+    for k in range(N - 1, -1, -1):
+        v0, v1 = 1 - (k + 1) / N, 1 - k / N
+        z1 = (k + 1) * rh
+        ibox(d, H, U0, U1, v0, v1, 0, z1, MAPLE['top'], riser, rside)
+        a, b = p(U0, v1, z1), p(U1, v1, z1)
+        d.line([(a[0] + 1, a[1] + 1), (b[0] - 1, b[1] + 1)], fill=G_YELLOW)  # jalur keselamatan
+        c0, c1 = p(U0, v0, z1), p(U1, v0, z1)
+        d.line([(c0[0] + 2, c0[1] + 1), (c1[0] - 1, c1[1] + 1)], fill=MAPLE['hi'])
+
+    def znose(v):
+        return min(N * rh, rh * (1 + (1 - v) * N))
+
+    # susur tangan kiri (sisi belakang) di atas anak tangga
+    ul = 0.07
+    for v in (1 - 0.5 / N, 1 - 3.5 / N, 1 - 6.5 / N):
+        k = int((1 - v) * N)
+        a, b = p(ul, v, (k + 1) * rh), p(ul, v, znose(v) + 14)
+        d.line([a, b], fill=STEEL_D)
+    rail = [p(ul, 1, rh + 14), p(ul, 1 / N, N * rh + 14), p(ul, 0, N * rh + 14)]
+    d.line(rail, fill=OL, width=3)
+    d.line(rail, fill=(150, 98, 58, 255))
+    # stringer kanan
+    zt = lambda v: znose(v) + 4
+    d.polygon([p(U1, 1, 0), p(1, 1, 0), p(1, 1, zt(1)), p(U1, 1, zt(1))], fill=(250, 250, 252, 255), outline=OL)
+    d.polygon([p(1, 1, 0), p(1, 0, 0), p(1, 0, zt(0)), p(1, 1 / N, zt(1 / N)), p(1, 1, zt(1))], fill=(226, 230, 236, 255), outline=OL)
+    d.polygon([p(1, 1, 1), p(1, 0, 1), p(1, 0, 5), p(1, 1, 5)], fill=G_BLUE)  # jalur biru tapak
+    d.polygon([p(U1, 1, zt(1)), p(1, 1, zt(1)), p(1, 1 / N, zt(1 / N)), p(1, 0, zt(0)), p(U1, 0, zt(0)), p(U1, 1 / N, zt(1 / N))],
+              fill=G_BLUE, outline=OL)
+    # anak panah "naik" (chevron putih) pada dinding sisi
+    for v in (0.72, 0.46):
+        z = zt(v) - 14
+        a, b, c = p(1, v + 0.1, z + 3), p(1, v, z + 6), p(1, v + 0.1, z + 9)
+        d.line([a, b, c], fill=(255, 255, 255, 255), width=1)
+        d.line([(a[0] + 1, a[1]), (b[0] + 1, b[1]), (c[0] + 1, c[1])], fill=(140, 184, 252, 255))
+    # susur tangan kanan di atas stringer
+    ur = 0.91
+    for v in (0.9, 0.5, 0.12):
+        d.line([p(ur, v, zt(v)), p(ur, v, zt(v) + 12)], fill=STEEL_D)
+    rail = [p(ur, 1, zt(1) + 12), p(ur, 1 / N, zt(1 / N) + 12), p(ur, 0, zt(0) + 12)]
+    d.line(rail, fill=OL, width=3)
+    d.line(rail, fill=(170, 112, 66, 255))
+    return img
+
+
+def stair_hut():
+    """Pondok tangga rooftop: dinding putih, bumbung rata, pintu biru menghadap +r, tanda EXIT hijau."""
+    H = 94
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    d.polygon([p(0.3, 0.95, 0), p(0.7, 0.95, 0), p(0.7, 1.0, 0), p(0.3, 1.0, 0)], fill=(70, 74, 84, 255))  # alas kaki
+    ibox(d, H, 0.06, 0.94, 0.06, 0.94, 0, 54, (230, 232, 236, 255), (246, 244, 238, 255), (212, 210, 202, 255))
+    for face in ('L', 'R'):
+        pts = [p(0.06, 0.94, 0), p(0.94, 0.94, 0), p(0.94, 0.94, 4), p(0.06, 0.94, 4)] if face == 'L' else \
+              [p(0.94, 0.94, 0), p(0.94, 0.06, 0), p(0.94, 0.06, 4), p(0.94, 0.94, 4)]
+        d.polygon(pts, fill=G_BLUE if face == 'L' else shade(G_BLUE, 0.78), outline=OL)
+    ibox(d, H, 0.0, 1.0, 0.0, 1.0, 54, 60, (204, 208, 216, 255), (156, 162, 174, 255), (126, 132, 144, 255), (236, 240, 246, 255))
+    # pintu
+    d.polygon([p(0.3, 0.94, 0), p(0.7, 0.94, 0), p(0.7, 0.94, 38), p(0.3, 0.94, 38)], fill=(52, 104, 196, 255), outline=OL)
+    d.polygon([p(0.37, 0.94, 22), p(0.63, 0.94, 22), p(0.63, 0.94, 34), p(0.37, 0.94, 34)], fill=(184, 222, 250, 255), outline=OL)
+    a = p(0.4, 0.94, 31)
+    d.point(a, fill=(255, 255, 255, 255))
+    d.point((a[0] + 1, a[1] - 1), fill=(255, 255, 255, 255))
+    h = p(0.62, 0.94, 17)
+    d.rectangle([h[0] - 1, h[1], h[0], h[1] + 2], fill=GOLD)
+    # tanda EXIT hijau di atas pintu
+    d.polygon([p(0.36, 0.94, 43), p(0.64, 0.94, 43), p(0.64, 0.94, 49), p(0.36, 0.94, 49)], fill=G_GREEN, outline=OL)
+    s = p(0.42, 0.94, 47)
+    for i in range(5):
+        d.point((s[0] + i, s[1] + i // 2), fill=(255, 255, 255, 255))
+    # papan tanda tangga (biru, ikon anak tangga putih) pada muka kanan
+    fl, fd = new(10, 10)
+    fd.rectangle([0, 0, 9, 9], fill=shade(G_BLUE, 0.85), outline=OL)
+    for k in range(4):
+        fd.rectangle([2 + k * 2, 7 - k * 2, 3 + k * 2, 7], fill=(255, 255, 255, 255))
+    x0, y0 = p(0.94, 0.62, 40)
+    paste_R(img, fl, x0, y0)
+    # lampu kecil di sisi pintu
+    l = p(0.78, 0.94, 36)
+    d.rectangle([l[0], l[1], l[0] + 1, l[1] + 2], fill=(255, 236, 160, 255), outline=OL)
+    return img
+
+
+def training_desk():
+    """Meja latihan kecil putih berkaki keluli, laptop dan buku nota."""
+    H = 56
+    img, d = new(56, H)
+    legs4(d, H, [(0.1, 0.22), (0.9, 0.22), (0.1, 0.78), (0.9, 0.78)], 12)
+    ibox(d, H, 0.06, 0.94, 0.18, 0.82, 12, 15, WHITE['top'], WHITE['left'], WHITE['right'], WHITE['hi'])
+    laptop(d, H, 0.3, 0.62, 0.36, 0.6, 15)
+    p = lambda u, v, z: isop(H, u, v, z)
+    d.polygon([p(0.66, 0.5, 15), p(0.86, 0.5, 15), p(0.86, 0.74, 15), p(0.66, 0.74, 15)], fill=(250, 246, 230, 255), outline=OL)
+    d.line([p(0.7, 0.6, 15), p(0.82, 0.6, 15)], fill=G_BLUE)
+    d.line([p(0.7, 0.66, 15), p(0.8, 0.66, 15)], fill=(170, 176, 190, 255))
+    return img
+
+
+def chart_flat(w, h):
+    """Kandungan carta ringkas (bar warna Google + garis trend) untuk skrin projektor."""
+    fl, fd = new(w, h)
+    fd.rectangle([0, 0, w - 1, h - 1], fill=(252, 252, 252, 255), outline=(150, 156, 168, 255))
+    fd.line([(3, 3), (14, 3)], fill=(60, 64, 76, 255))
+    fd.line([(3, 5), (10, 5)], fill=(170, 176, 188, 255))
+    fd.line([(4, 8), (4, h - 4), (w - 4, h - 4)], fill=(110, 116, 128, 255))
+    bars = [(G_BLUE, 5), (G_RED, 8), (G_YELLOW, 7), (G_GREEN, 11), (G_BLUE, 14)]
+    for i, (col, bh) in enumerate(bars):
+        x = 7 + i * 5
+        fd.rectangle([x, h - 5 - bh, x + 2, h - 5], fill=col)
+    pts = [(8, h - 10), (13, h - 13), (18, h - 12), (23, h - 17), (28, h - 21)]
+    fd.line(pts, fill=(52, 120, 80, 255))
+    fd.ellipse([w - 9, 3, w - 4, 8], fill=G_YELLOW, outline=(180, 130, 0, 255))
+    fd.pieslice([w - 9, 3, w - 4, 8], -90, 30, fill=G_BLUE)
+    return fl
+
+
+def projector_screen():
+    """Skrin projektor tarik-naik atas tripod; satah skrin selari paksi c (menghadap +r)."""
+    H = 86
+    img, d = new(56, H)
+    hub = (28, H - 32)
+    d.line([hub, (30, H - 19)], fill=(70, 74, 84, 255), width=2)  # kaki belakang
+    d.rectangle([27, H - 74, 28, hub[1]], fill=(80, 84, 94, 255))  # tiang
+    W, Hs = 37, 32
+    fl, fd = new(W, Hs)
+    fd.rounded_rectangle([0, 0, W - 1, 3], radius=1, fill=(64, 68, 80, 255), outline=OL)
+    fd.rectangle([1, 4, W - 2, Hs - 1], fill=(210, 214, 222, 255), outline=OL)
+    fl.alpha_composite(chart_flat(W - 4, Hs - 7), (2, 5))
+    fd.line([(W // 2 - 1, Hs - 1), (W // 2 + 1, Hs - 1)], fill=(64, 68, 80, 255))
+    x0, y0 = isop(H, -0.15, 0.5, 60)
+    paste_L(img, fl, x0, y0)
+    d.line([hub, (17, H - 12)], fill=(80, 84, 94, 255), width=2)  # kaki depan
+    d.line([hub, (40, H - 12)], fill=(80, 84, 94, 255), width=2)
+    for x, y in ((17, H - 12), (40, H - 12), (30, H - 19)):
+        d.rectangle([x - 1, y, x + 1, y + 1], fill=OL)
+    d.rectangle([26, hub[1] - 1, 29, hub[1] + 1], fill=(50, 54, 62, 255), outline=OL)
+    return img
+
+
+def whiteboard():
+    """Whiteboard bergerak (tiang + roda) dengan contengan warna; satah selari paksi c."""
+    H = 76
+    img, d = new(56, H)
+    W, Hb = 40, 27
+    x0, y0 = isop(H, -0.2, 0.5, 50)
+    # tiang kiri & kanan (lukis dulu, papan menindih)
+    lp, rp = (x0 - 1, y0 - 2), (x0 + W, y0 + W // 2 - 2)
+    lg, rg = (lp[0], isop(H, -0.22, 0.5, 0)[1]), (rp[0], rp[1] + 50)
+    for top, bot in ((lp, lg), (rp, rg)):
+        d.rectangle([top[0] - 1, top[1], top[0] + 1, bot[1]], fill=STEEL, outline=OL)
+    fl, fd = new(W, Hb)
+    fd.rectangle([0, 0, W - 1, Hb - 1], fill=(196, 202, 212, 255), outline=OL)
+    fd.rectangle([2, 2, W - 3, Hb - 6], fill=(253, 253, 253, 255))
+    fd.rectangle([1, Hb - 4, W - 2, Hb - 2], fill=(150, 158, 170, 255), outline=OL)
+    for i, col in enumerate((G_RED, G_BLUE, G_GREEN)):
+        fd.line([(6 + i * 4, Hb - 3), (8 + i * 4, Hb - 3)], fill=col)
+    fd.line([(4, 5), (7, 4), (10, 5), (13, 4), (16, 5)], fill=G_BLUE)       # tajuk
+    fd.rectangle([4, 9, 12, 15], outline=G_RED)                             # kotak
+    fd.line([(13, 12), (19, 12)], fill=(60, 64, 76, 255))                   # anak panah
+    fd.line([(17, 10), (19, 12), (17, 14)], fill=(60, 64, 76, 255))
+    fd.ellipse([20, 8, 29, 16], outline=G_GREEN)
+    fd.line([(23, 12), (24, 14), (27, 10)], fill=G_GREEN)                   # tanda betul
+    fd.rectangle([31, 4, 36, 9], fill=(253, 230, 138, 255), outline=(200, 160, 40, 255))  # nota lekat
+    for y in (18, 20):
+        fd.line([(4, y), (4 + (24 if y == 18 else 16), y)], fill=(150, 156, 170, 255))
+    paste_L(img, fl, x0, y0)
+    # kaki T + roda
+    for g in (lg, rg):
+        d.line([(g[0] - 4, g[1] + 2), (g[0] + 4, g[1] - 2)], fill=OL, width=2)
+        for wx, wy in ((g[0] - 4, g[1] + 2), (g[0] + 4, g[1] - 2)):
+            d.rectangle([wx - 1, wy, wx, wy + 1], fill=(40, 40, 46, 255))
+    return img
+
+
+def coffee_table():
+    """Meja kopi rendah kayu dengan majalah dan cawan."""
+    H = 40
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    wood = dict(top=(160, 108, 66, 255), left=(128, 84, 50, 255), right=(100, 64, 38, 255), hi=(196, 146, 100, 255))
+    legs4(d, H, [(0.16, 0.16), (0.84, 0.16), (0.16, 0.84), (0.84, 0.84)], 8, 0.035, (90, 58, 34, 255))
+    ibox(d, H, 0.1, 0.9, 0.1, 0.9, 8, 11, wood['top'], wood['left'], wood['right'], wood['hi'])
+    z = 11
+    d.polygon([p(0.22, 0.42, z), p(0.52, 0.42, z), p(0.52, 0.7, z), p(0.22, 0.7, z)], fill=G_BLUE, outline=OL)
+    d.line([p(0.27, 0.5, z), p(0.46, 0.5, z)], fill=(255, 255, 255, 255))
+    d.polygon([p(0.3, 0.52, z + 1), p(0.58, 0.6, z + 1), p(0.5, 0.86, z + 1), p(0.22, 0.78, z + 1)], fill=(250, 246, 236, 255), outline=OL)
+    d.line([p(0.32, 0.62, z + 1), p(0.5, 0.68, z + 1)], fill=G_RED)
+    for (u, v) in ((0.7, 0.32), (0.66, 0.62)):
+        x, y = p(u, v, z)
+        d.rectangle([x - 2, y - 4, x + 1, y], fill=(255, 255, 255, 255), outline=OL)
+        d.line([(x - 1, y - 4), (x, y - 4)], fill=(110, 66, 36, 255))
+    return img
+
+
+def exec_desk():
+    """Meja eksekutif walnut gelap: trim emas, monitor, lampu banker hijau, plat nama."""
+    H = 70
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    box(d, H, 18, WALNUT['top'], WALNUT['left'], WALNUT['right'], WALNUT['hi'])
+    d.line([p(0.03, 1, 14), p(0.97, 1, 14)], fill=GOLD)
+    d.line([p(1, 0.97, 14), p(1, 0.03, 14)], fill=shade(GOLD, 0.75))
+    d.polygon([p(0.14, 1, 3), p(0.86, 1, 3), p(0.86, 1, 11), p(0.14, 1, 11)], outline=(52, 30, 18, 255))
+    d.polygon([p(1, 0.86, 3), p(1, 0.14, 3), p(1, 0.14, 11), p(1, 0.86, 11)], outline=(38, 22, 13, 255))
+    t = p(0.5, 0.5, 18)  # pusat muka atas
+    d.line([(t[0] - 18, t[1]), (t[0] - 4, t[1] - 7)], fill=(128, 84, 58, 255))  # kilau
+    # monitor nipis
+    d.rectangle([t[0] - 6, t[1] - 22, t[0] + 9, t[1] - 11], fill=(30, 32, 40, 255), outline=OL)
+    d.rectangle([t[0] - 4, t[1] - 20, t[0] + 7, t[1] - 13], fill=(36, 72, 132, 255))
+    d.line([(t[0] - 3, t[1] - 19), (t[0] + 1, t[1] - 19)], fill=(140, 190, 250, 255))
+    d.rectangle([t[0] + 1, t[1] - 10, t[0] + 2, t[1] - 7], fill=(60, 62, 70, 255))
+    d.rectangle([t[0] - 2, t[1] - 7, t[0] + 5, t[1] - 6], fill=(60, 62, 70, 255), outline=OL)
+    # lampu banker: tapak tembaga + tudung hijau
+    lx, ly = t[0] - 15, t[1] - 3
+    d.rectangle([lx - 2, ly - 1, lx + 2, ly], fill=GOLD, outline=OL)
+    d.line([(lx, ly - 2), (lx, ly - 8)], fill=GOLD)
+    d.polygon([(lx - 5, ly - 8), (lx + 5, ly - 8), (lx + 3, ly - 12), (lx - 3, ly - 12)], fill=(24, 120, 60, 255), outline=OL)
+    d.line([(lx - 2, ly - 11), (lx + 2, ly - 11)], fill=(90, 190, 120, 255))
+    d.line([(lx - 3, ly - 7), (lx + 3, ly - 7)], fill=(255, 236, 160, 255))
+    # kertas + pen
+    d.polygon([(t[0] + 10, t[1] + 1), (t[0] + 17, t[1] - 2), (t[0] + 21, t[1]), (t[0] + 14, t[1] + 3)], fill=(246, 244, 236, 255), outline=OL)
+    d.line([(t[0] + 13, t[1] + 4), (t[0] + 19, t[1] + 1)], fill=GOLD)
+    # plat nama emas di depan
+    n = p(0.5, 0.82, 18)
+    d.polygon([(n[0] - 7, n[1] - 1), (n[0] + 1, n[1] + 3), (n[0] + 1, n[1] + 1), (n[0] - 7, n[1] - 3)], fill=(40, 30, 24, 255), outline=OL)
+    d.line([(n[0] - 6, n[1] - 2), (n[0], n[1] + 1)], fill=GOLD)
+    return img
+
+
+def glass_wall():
+    """Dinding kaca pejabat: geometri sama partition (garisan a->b melalui tengah tile) tetapi
+    lebih tinggi. Kanvas 56x96, tengah tile (28, 82). Kaca separa lut sinar (RGBA) + jalur frosted."""
+    img, d = new(56, 96)
+    a, b = (14, 75), (42, 89)
+    h = 62
+    frame, frame_l = (150, 160, 174, 255), (214, 220, 230, 255)
+    seg = lambda z0, z1: [(a[0], a[1] - z0), (b[0], b[1] - z0), (b[0], b[1] - z1), (a[0], a[1] - z1)]
+    d.polygon(seg(4, h - 3), fill=(178, 216, 244, 88))
+    d.polygon(seg(26, 35), fill=(234, 244, 252, 196))
+    d.line([(a[0], a[1] - 26), (b[0], b[1] - 26)], fill=(206, 222, 236, 220))
+    for k, (dx0, dz0, dx1, dz1) in enumerate(((4, 10, 10, 24), (6, 40, 12, 56), (16, 42, 20, 52))):
+        d.line([(a[0] + dx0, a[1] + dx0 // 2 - dz0), (a[0] + dx1, a[1] + dx1 // 2 - dz1)], fill=(255, 255, 255, 150 if k < 2 else 110))
+    d.polygon(seg(0, 4), fill=frame, outline=OL)                                        # rel bawah
+    d.polygon(seg(h - 3, h), fill=frame_l, outline=OL)                                  # rel atas
+    d.polygon([(a[0], a[1] - h), (b[0], b[1] - h), (b[0] + 2, b[1] - h - 1), (a[0] + 2, a[1] - h - 1)],
+              fill=(236, 240, 246, 255), outline=OL)
+    d.line([(a[0], a[1]), (a[0], a[1] - h)], fill=OL)                                   # tiang hujung
+    d.line([(a[0] + 1, a[1] - 1), (a[0] + 1, a[1] - h + 1)], fill=frame)
+    d.polygon([b, (b[0], b[1] - h), (b[0] + 2, b[1] - h - 1), (b[0] + 2, b[1] - 1)], fill=frame, outline=OL)
+    return img
+
+
+def railing():
+    """Pagar kaca tepi bangunan pada tepi hadapan-kiri tile (+r), sepanjang paksi c."""
+    H = 56
+    img, d = new(56, H)
+    a, b = (0, H - 14), (28, H)
+    rh = 22
+    seg = lambda z0, z1: [(a[0], a[1] - z0), (b[0], b[1] - z0), (b[0], b[1] - z1), (a[0], a[1] - z1)]
+    d.polygon(seg(3, rh - 2), fill=(188, 224, 250, 96))
+    d.line([(a[0] + 5, a[1] + 2 - 6), (a[0] + 9, a[1] + 4 - 16)], fill=(255, 255, 255, 150))
+    d.line([(a[0] + 15, a[1] + 7 - 5), (a[0] + 18, a[1] + 9 - 12)], fill=(255, 255, 255, 110))
+    d.polygon(seg(0, 3), fill=(118, 124, 136, 255), outline=OL)
+    d.polygon(seg(rh - 2, rh + 1), fill=(210, 216, 226, 255), outline=OL)
+    d.line([(a[0] + 1, a[1] - rh), (b[0] - 1, b[1] - rh)], fill=(255, 255, 255, 255))
+    for x, y in (a, b):
+        d.line([(x, y - 1), (x, y - rh)], fill=STEEL_D)
+    return img
+
+
+def arcade():
+    """Kabinet arked: marquee bercahaya, skrin game, panel kawalan, seni sisi warna Google."""
+    H = 78
+    img, d = new(56, H)
+    bx, by, hw, h = 28, H - 7, 14, 50
+    body_l, body_r = (56, 50, 112, 255), (38, 34, 80, 255)
+    sbox(d, bx, by, hw, h, (30, 30, 42, 255), body_l, body_r, (96, 90, 160, 255))
+    W = hw - 2
+    mq, md = new(W, 6)
+    md.rectangle([0, 0, W - 1, 5], fill=G_YELLOW, outline=OL)
+    for i, col in enumerate((G_RED, G_BLUE, G_GREEN, G_RED)):
+        md.rectangle([1 + i * 3, 2, 2 + i * 3, 3], fill=col)
+    face_paste(img, mq, bx, by, hw, h, 'L', 1, 2)
+    sc, sd = new(W, 13)
+    sd.rectangle([0, 0, W - 1, 12], fill=(10, 14, 34, 255), outline=(90, 210, 255, 255))
+    inv = ["..X.X..", ".XXXXX.", "XX.X.XX", "XXXXXXX", ".X...X."]
+    for gy, row in enumerate(inv):
+        for gx, ch in enumerate(row):
+            if ch == 'X':
+                sc.putpixel((2 + gx, 2 + gy), (110, 240, 120, 255))
+    for x, y, col in ((9, 3, G_YELLOW), (3, 9, G_RED), (6, 10, G_BLUE), (9, 9, (255, 255, 255, 255))):
+        sc.putpixel((x, y), col)
+    face_paste(img, sc, bx, by, hw, h, 'L', 1, 9)
+    cp, cd = new(W, 7)
+    cd.rectangle([0, 0, W - 1, 6], fill=(40, 40, 50, 255), outline=OL)
+    cd.rectangle([2, 1, 3, 2], fill=G_RED)
+    cd.line([(2, 3), (2, 4)], fill=(20, 20, 24, 255))
+    for i, col in enumerate((G_BLUE, G_YELLOW, G_GREEN)):
+        cp.putpixel((6 + i * 2, 3 + (i % 2)), col)
+    face_paste(img, cp, bx, by, hw, h, 'L', 1, 24)
+    cn, ccd = new(5, 6)
+    ccd.rectangle([0, 0, 4, 5], fill=(26, 26, 34, 255), outline=OL)
+    ccd.line([(2, 1), (2, 3)], fill=(255, 150, 40, 255))
+    face_paste(img, cn, bx, by, hw, h, 'L', 4, 36)
+    side, sdd = new(hw - 1, 44)
+    for i, col in enumerate((G_BLUE, G_RED, G_YELLOW, G_GREEN)):
+        y = 6 + i * 9
+        sdd.polygon([(0, y + 6), (hw - 2, y), (hw - 2, y + 4), (0, y + 10)], fill=shade(col, 0.75))
+    face_paste(img, side, bx, by, hw, h, 'R', 0, 3)
+    return img
+
+
+def tv_console():
+    """TV besar atas kabinet rendah, konsol game putih + controller. Skrin menghadap +r."""
+    H = 70
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    cab = dict(top=(112, 80, 56, 255), left=(90, 62, 42, 255), right=(70, 48, 32, 255), hi=(150, 112, 80, 255))
+    ibox(d, H, 0.04, 0.96, 0.36, 0.92, 0, 12, cab['top'], cab['left'], cab['right'], cab['hi'])
+    d.line([p(0.5, 0.92, 2), p(0.5, 0.92, 10)], fill=OL)
+    for u in (0.44, 0.56):
+        d.line([p(u, 0.92, 5), p(u, 0.92, 7)], fill=STEEL)
+    ibox(d, H, 0.42, 0.58, 0.48, 0.58, 12, 15, (40, 40, 46, 255), (30, 30, 36, 255), (22, 22, 28, 255))
+    ibox(d, H, 0.0, 1.0, 0.48, 0.55, 15, 46, (44, 44, 52, 255), (22, 22, 28, 255), (16, 16, 20, 255))
+    W, Hs = 26, 28
+    fl, fd = new(W, Hs)
+    for y in range(Hs):
+        t = y / (Hs - 1)
+        fd.line([(0, y), (W - 1, y)], fill=(int(96 + 70 * t), int(170 + 50 * t), 250, 255))
+    fd.rectangle([0, Hs - 7, W - 1, Hs - 1], fill=(70, 170, 70, 255))
+    fd.rectangle([0, Hs - 4, W - 1, Hs - 1], fill=(150, 100, 54, 255))
+    for x in range(0, W, 4):
+        fd.point((x, Hs - 4), fill=(190, 140, 80, 255))
+    fd.ellipse([3, 4, 10, 8], fill=(255, 255, 255, 255))
+    fd.ellipse([15, 2, 21, 6], fill=(255, 255, 255, 255))
+    fd.rectangle([6, Hs - 13, 9, Hs - 8], fill=G_RED)        # hero merah
+    fd.rectangle([6, Hs - 14, 9, Hs - 13], fill=(140, 40, 30, 255))
+    fd.rectangle([17, Hs - 11, 20, Hs - 8], fill=G_BLUE)     # musuh biru
+    fd.rectangle([12, Hs - 17, 13, Hs - 16], fill=G_YELLOW)  # syiling
+    fd.rectangle([14, Hs - 20, 22, Hs - 18], fill=(196, 120, 60, 255))
+    x0, y0 = p(0.04, 0.55, 43)
+    paste_L(img, fl, x0, y0)
+    ibox(d, H, 0.08, 0.34, 0.72, 0.9, 12, 15, (246, 246, 250, 255), (224, 226, 232, 255), (190, 194, 204, 255))
+    d.line([p(0.12, 0.9, 13), p(0.3, 0.9, 13)], fill=G_BLUE)
+    c = p(0.72, 0.78, 12)
+    d.ellipse([c[0] - 4, c[1] - 2, c[0] + 3, c[1] + 1], fill=(44, 44, 52, 255), outline=OL)
+    d.point((c[0] + 1, c[1] - 1), fill=G_RED)
+    d.point((c[0] - 2, c[1] - 1), fill=G_BLUE)
+    return img
+
+
+def beanbag(color):
+    H = 40
+    img = Image.new('RGBA', (56, H), (0, 0, 0, 0))
+    lay, d = new(56, H)
+    d.ellipse([9, H - 27, 47, H - 6], fill=shade(color, 0.62))
+    d.ellipse([10, H - 30, 45, H - 9], fill=shade(color, 0.82))
+    d.ellipse([22, H - 38, 45, H - 18], fill=shade(color, 0.95))  # sandaran
+    d.ellipse([25, H - 37, 37, H - 30], fill=shade(color, 1.18))
+    d.ellipse([12, H - 26, 34, H - 13], fill=shade(color, 1.05))  # lekuk tempat duduk
+    d.ellipse([15, H - 24, 26, H - 19], fill=shade(color, 1.22))
+    d.line([(24, H - 15), (32, H - 20)], fill=shade(color, 0.7))
+    d.line([(40, H - 12), (44, H - 16)], fill=shade(color, 0.5))
+    outline_alpha(lay)
+    img.alpha_composite(lay)
+    return img
+
+
+def umbrella_table():
+    """Meja patio bulat + payung jalur warna Google."""
+    H = 98
+    img, d = new(56, H)
+    yt = H - 14 - 16
+    d.ellipse([22, H - 18, 34, H - 11], fill=(110, 116, 128, 255), outline=OL)
+    d.rectangle([26, yt, 29, H - 14], fill=(170, 176, 188, 255), outline=OL)
+    d.ellipse([12, yt - 6, 44, yt + 9], fill=(196, 200, 208, 255), outline=OL)
+    d.ellipse([12, yt - 8, 44, yt + 6], fill=(248, 248, 248, 255), outline=OL)
+    d.arc([15, yt - 6, 41, yt + 4], 200, 300, fill=(255, 255, 255, 255))
+    A = H - 14 - 78
+    R = H - 14 - 62
+    d.rectangle([26, A, 29, yt - 2], fill=(226, 228, 232, 255), outline=OL)  # tiang
+    can, cd = new(56, H)
+    rx, ry = 27, 9
+    rim = [(28 + rx * math.cos(math.radians(22.5 + i * 45)), R + ry * math.sin(math.radians(22.5 + i * 45))) for i in range(8)]
+    cols = [G_BLUE, G_RED, G_YELLOW, G_GREEN]
+    order = sorted(range(8), key=lambda i: rim[i][1] + rim[(i + 1) % 8][1])
+    for i in order:
+        r0, r1 = rim[i], rim[(i + 1) % 8]
+        mid = math.radians(22.5 + (i + 0.5) * 45)
+        f = 1.0 - 0.14 * math.cos(mid)
+        cd.polygon([(28, A), r0, r1], fill=shade(cols[i % 4], f))
+        if (r0[1] + r1[1]) / 2 > R - 2:  # valance berkelok di hadapan
+            m = ((r0[0] + r1[0]) / 2, (r0[1] + r1[1]) / 2 + 3)
+            cd.polygon([r0, r1, m], fill=shade(cols[i % 4], f * 0.82))
+    for i in range(8):
+        if rim[i][1] > R - 4:
+            cd.line([(28, A), rim[i]], fill=(255, 255, 255, 120))
+    outline_alpha(can)
+    img.alpha_composite(can)
+    d.rectangle([27, A - 3, 28, A], fill=(240, 240, 244, 255), outline=OL)  # finial
+    return img
+
+
+def lounger():
+    """Kerusi rehat kayu (sepanjang paksi c), sandaran di hujung belakang, kusyen jalur biru/putih."""
+    H = 50
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    legs4(d, H, [(0.08, 0.34), (0.92, 0.34), (0.08, 0.68), (0.92, 0.68)], 6, 0.025, TEAK['right'])
+    ibox(d, H, 0.03, 0.97, 0.3, 0.72, 5, 8, TEAK['top'], TEAK['left'], TEAK['right'], TEAK['hi'])
+    # sandaran condong
+    d.polygon([p(0.06, 0.72, 8), p(0.3, 0.72, 8), p(0.08, 0.72, 26)], fill=TEAK['left'], outline=OL)
+    d.polygon([p(0.3, 0.3, 8), p(0.3, 0.72, 8), p(0.08, 0.72, 26), p(0.08, 0.3, 26)], fill=TEAK['top'], outline=OL)
+    d.polygon([p(0.28, 0.34, 10), p(0.28, 0.68, 10), p(0.11, 0.68, 24), p(0.11, 0.34, 24)], fill=(250, 250, 250, 255), outline=OL)
+    for k in range(3):  # jalur biru pada kusyen sandaran
+        z = 13 + k * 4
+        u = 0.28 - (z - 10) / 14 * 0.17
+        d.line([p(u, 0.36, z), p(u, 0.66, z)], fill=G_BLUE)
+    # kusyen tempat duduk
+    ibox(d, H, 0.32, 0.95, 0.34, 0.68, 8, 11, (250, 250, 250, 255), (226, 230, 236, 255), (196, 202, 212, 255))
+    for u in (0.4, 0.54, 0.68, 0.82):
+        d.line([p(u, 0.36, 11), p(u, 0.67, 11)], fill=G_BLUE)
+        d.line([p(u, 0.68, 10), p(u, 0.68, 9)], fill=shade(G_BLUE, 0.8))
+    t = p(0.62, 0.42, 11)  # tuala kuning dilipat
+    d.polygon([(t[0] - 4, t[1]), (t[0], t[1] - 2), (t[0] + 4, t[1]), (t[0], t[1] + 2)], fill=G_YELLOW, outline=OL)
+    return img
+
+
+def bbq():
+    """Gril BBQ kettle: tudung merah tertutup, mangkuk hitam, 3 kaki, roda."""
+    H = 66
+    img = Image.new('RGBA', (56, H), (0, 0, 0, 0))
+    lay, d = new(56, H)
+    Yc = H - 14 - 28
+    leg = (86, 90, 100, 255)
+    d.line([(28, Yc + 6), (30, H - 18)], fill=shade(leg, 0.7), width=2)
+    d.polygon([(21, H - 23), (35, H - 23), (30, H - 20), (24, H - 20)], fill=(150, 156, 168, 255))
+    d.line([(20, Yc + 6), (16, H - 13)], fill=leg, width=2)
+    d.line([(36, Yc + 6), (40, H - 13)], fill=leg, width=2)
+    d.ellipse([14, H - 16, 18, H - 12], fill=(30, 30, 34, 255))
+    d.ellipse([38, H - 16, 42, H - 12], fill=(30, 30, 34, 255))
+    d.chord([14, Yc - 10, 42, Yc + 10], 0, 180, fill=(44, 44, 50, 255))
+    d.chord([14, Yc - 15, 42, Yc + 15], 180, 360, fill=(206, 54, 42, 255))
+    d.chord([17, Yc - 13, 34, Yc + 5], 190, 280, fill=(240, 104, 86, 255))
+    d.line([(15, Yc), (41, Yc)], fill=(130, 30, 24, 255))
+    d.line([(15, Yc + 1), (41, Yc + 1)], fill=(150, 156, 168, 255))
+    d.rectangle([12, Yc - 1, 14, Yc + 1], fill=(30, 30, 34, 255))
+    d.rectangle([42, Yc - 1, 44, Yc + 1], fill=(30, 30, 34, 255))
+    d.rectangle([25, Yc - 18, 31, Yc - 17], fill=(200, 206, 214, 255))  # pemegang
+    d.point((25, Yc - 16), fill=(200, 206, 214, 255))
+    d.point((31, Yc - 16), fill=(200, 206, 214, 255))
+    for x in (21, 23):
+        d.point((x, Yc - 9), fill=(120, 26, 20, 255))
+    d.rectangle([33, Yc - 7, 35, Yc - 5], fill=(240, 240, 240, 255))  # termometer
+    d.point((34, Yc - 6), fill=OL)
+    d.rectangle([24, Yc + 4, 32, Yc + 6], fill=(28, 28, 32, 255))
+    outline_alpha(lay)
+    img.alpha_composite(lay)
+    return img
+
+
+def planter():
+    """Kotak penanam kayu berjalur dengan pokok renek dan bunga warna Google."""
+    H = 58
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    ibox(d, H, 0.06, 0.94, 0.06, 0.94, 0, 14, TEAK['top'], TEAK['left'], TEAK['right'], TEAK['hi'])
+    for z in (5, 10):
+        d.line([p(0.07, 0.94, z), p(0.93, 0.94, z)], fill=shade(TEAK['left'], 0.78))
+        d.line([p(0.94, 0.93, z), p(0.94, 0.07, z)], fill=shade(TEAK['right'], 0.78))
+    d.polygon([p(0.14, 0.14, 14), p(0.86, 0.14, 14), p(0.86, 0.86, 14), p(0.14, 0.86, 14)], fill=(88, 60, 40, 255), outline=OL)
+    fol, fd = new(56, H)
+    cy = H - 28 - 6
+    dark, mid, light = (44, 98, 50, 255), (70, 138, 66, 255), (112, 176, 92, 255)
+    for (x, y, r) in ((16, cy - 2, 8), (40, cy - 2, 8), (24, cy - 9, 9), (34, cy - 10, 9), (28, cy + 1, 9), (29, cy - 17, 6)):
+        fd.ellipse([x - r, y - r, x + r, y + r], fill=mid)
+    rnd = random.Random(21)
+    for _ in range(70):
+        x, y = rnd.randint(6, 50), rnd.randint(cy - 24, cy + 10)
+        if fol.getpixel((x, y))[3]:
+            fd.rectangle([x, y, x + 1, y], fill=light if rnd.random() < 0.5 else dark)
+    for (x, y), col in zip(((14, cy - 4), (22, cy - 12), (33, cy - 6), (38, cy - 13), (27, cy - 18), (42, cy - 2), (20, cy + 1), (30, cy - 1)),
+                           (G_RED, G_YELLOW, (255, 255, 255, 255), G_RED, G_YELLOW, G_BLUE, (255, 255, 255, 255), G_RED)):
+        fd.rectangle([x, y, x + 1, y + 1], fill=col)
+    outline_alpha(fol, (30, 64, 36, 255))
+    img.alpha_composite(fol)
+    return img
+
+
+def outdoor_desk():
+    """Meja kerja luar: permukaan jati berjalur, kaki logam hitam, laptop dan cawan."""
+    H = 58
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    blk = (40, 42, 48, 255)
+    for u in (0.12, 0.88):
+        d.line([p(u, 0.18, 13), p(u, 0.24, 0)], fill=blk, width=2)
+        d.line([p(u, 0.82, 13), p(u, 0.76, 0)], fill=blk, width=2)
+        d.line([p(u, 0.21, 5), p(u, 0.79, 5)], fill=blk)
+    ibox(d, H, 0.04, 0.96, 0.12, 0.88, 13, 16, TEAK['top'], TEAK['left'], TEAK['right'], TEAK['hi'])
+    for v in (0.31, 0.5, 0.69):
+        d.line([p(0.06, v, 16), p(0.94, v, 16)], fill=shade(TEAK['top'], 0.82))
+    laptop(d, H, 0.3, 0.62, 0.34, 0.58, 16, body=(196, 200, 208, 255))
+    x, y = p(0.78, 0.6, 16)
+    d.rectangle([x - 2, y - 4, x + 1, y], fill=(255, 255, 255, 255), outline=OL)
+    d.line([(x - 1, y - 4), (x, y - 4)], fill=(110, 66, 36, 255))
+    return img
+
+
+def ac_unit():
+    """Unit kondenser aircond rooftop: kotak kelabu, kipas bulat pada muka hadapan, sirip di sisi."""
+    H = 56
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    ibox(d, H, 0.04, 0.96, 0.1, 0.9, 0, 3, (168, 170, 172, 255), (140, 142, 146, 255), (118, 120, 124, 255))
+    ibox(d, H, 0.08, 0.92, 0.18, 0.82, 3, 28, (226, 230, 236, 255), (206, 212, 220, 255), (162, 170, 182, 255), (246, 248, 252, 255))
+    fl, fd = new(22, 22)
+    fd.ellipse([1, 1, 20, 20], fill=(70, 76, 88, 255), outline=OL)
+    fd.ellipse([4, 4, 17, 17], outline=(120, 128, 142, 255))
+    for ang in (20, 110, 200, 290):
+        a = math.radians(ang)
+        fd.line([(10.5, 10.5), (10.5 + 7 * math.cos(a), 10.5 + 7 * math.sin(a))], fill=(150, 158, 172, 255), width=2)
+    fd.ellipse([8, 8, 13, 13], fill=(196, 202, 212, 255), outline=OL)
+    x0, y0 = p(0.14, 0.82, 26)
+    paste_L(img, fl, x0, y0)
+    for i in range(1, 11):  # sirip
+        v = 0.8 - i * 0.056
+        d.line([p(0.92, v, 6), p(0.92, v, 25)], fill=(140, 148, 160, 255))
+    for i in range(1, 6):  # gril atas
+        u = 0.08 + i * 0.14
+        d.line([p(u, 0.22, 28), p(u, 0.78, 28)], fill=(190, 196, 206, 255))
+    d.rectangle([p(0.66, 0.82, 24)[0], p(0.66, 0.82, 24)[1], p(0.66, 0.82, 24)[0] + 3, p(0.66, 0.82, 24)[1] + 1], fill=G_BLUE)
+    pa, pb = p(0.92, 0.3, 10), p(0.92, 0.3, 4)
+    d.line([pa, (pa[0] + 5, pa[1] - 2), (pa[0] + 5, pa[1] + 8)], fill=(196, 120, 60, 255), width=2)  # paip tembaga
+    return img
+
+
+def pantry_counter():
+    """Kaunter dapur: kabinet putih (pemegang biru), permukaan batu kelabu, sinki keluli + pili, rak pinggan."""
+    H = 60
+    img, d = new(56, H)
+    p = lambda u, v, z: isop(H, u, v, z)
+    box(d, H, 20, (214, 216, 222, 255), (246, 246, 248, 255), (208, 212, 218, 255), (240, 242, 246, 255))
+    d.polygon([p(0, 1, 0), p(1, 1, 0), p(1, 1, 3), p(0, 1, 3)], fill=(84, 90, 102, 255), outline=OL)
+    d.polygon([p(1, 1, 0), p(1, 0, 0), p(1, 0, 3), p(1, 1, 3)], fill=(66, 72, 84, 255), outline=OL)
+    d.line([p(0, 1, 17), p(1, 1, 17)], fill=(170, 174, 182, 255))
+    d.line([p(1, 1, 17), p(1, 0, 17)], fill=(150, 154, 162, 255))
+    d.line([p(0.5, 1, 4), p(0.5, 1, 16)], fill=(180, 184, 192, 255))
+    d.line([p(1, 0.5, 4), p(1, 0.5, 16)], fill=(160, 164, 172, 255))
+    for u in (0.42, 0.58):
+        a = p(u, 1, 13)
+        d.line([a, (a[0], a[1] + 3)], fill=G_BLUE)
+    for v in (0.42, 0.58):
+        a = p(1, v, 13)
+        d.line([a, (a[0], a[1] + 3)], fill=shade(G_BLUE, 0.8))
+    z = 20
+    d.polygon([p(0.18, 0.22, z), p(0.58, 0.22, z), p(0.58, 0.6, z), p(0.18, 0.6, z)], fill=(176, 184, 196, 255), outline=(104, 112, 126, 255))
+    d.polygon([p(0.24, 0.28, z), p(0.52, 0.28, z), p(0.52, 0.54, z), p(0.24, 0.54, z)], fill=(132, 142, 158, 255))
+    f = p(0.36, 0.16, z)
+    d.line([f, (f[0], f[1] - 7), (f[0] + 3, f[1] - 6)], fill=(214, 220, 230, 255), width=2)
+    d.point((f[0] + 4, f[1] - 4), fill=OL)
+    for k in range(3):  # rak pinggan
+        q = p(0.66 + k * 0.08, 0.5, z)
+        d.ellipse([q[0] - 2, q[1] - 7, q[0] + 1, q[1]], fill=(250, 250, 252, 255), outline=OL)
+    m = p(0.7, 0.82, z)
+    d.rectangle([m[0] - 2, m[1] - 4, m[0] + 1, m[1]], fill=G_RED, outline=OL)
+    return img
+
+
+def pattern_tile(fn, edge=None):
+    """Jubin lantai 56x28 (bentuk sama floor_tile); fn(u, v, x, y) -> warna untuk setiap piksel."""
+    img, d = new(56, 28)
+    pts = [(28, 0), (55, 14), (28, 27), (0, 14)]
+    d.polygon(pts, fill=(255, 255, 255, 255))
+    d.polygon(pts, outline=(255, 255, 255, 255))  # liputan piksel sama floor_tile (tiada celah antara jubin)
+    px = img.load()
+    for y in range(28):
+        for x in range(56):
+            if px[x, y][3]:
+                a, b = (x + 0.5 - 28) / 28, (y + 0.5) / 14
+                u = min(max((a + b) / 2, 0.0), 0.999)
+                v = min(max((b - a) / 2, 0.0), 0.999)
+                px[x, y] = fn(u, v, x, y)
+    if edge:
+        d.polygon(pts, outline=edge)
+    return img
+
+
+def tint_add(color, k):
+    return tuple(max(0, min(255, c + k)) for c in color[:3]) + (255,)
+
+
+def deck_tile(variant):
+    """Dek kayu luar kelabu-perang: 4 papan sepanjang paksi c setiap tile, sambungan berselang."""
+    base = (150, 128, 106) if variant == 'a' else (140, 119, 98)
+    seam = (92, 76, 62, 255)
+    tones = [[0, -5], [6, 1], [-4, 3], [3, -3]]
+    rnd = random.Random(31 if variant == 'a' else 32)
+    grain = {(rnd.randint(0, 55), rnd.randint(0, 27)) for _ in range(60)}
+
+    def fn(u, v, x, y):
+        k = min(3, int(v * 4))
+        fv = v * 4 - k
+        if fv < 0.15:
+            return seam
+        off = 0.0 if k % 2 == 0 else 0.5
+        du = (u - off) % 1.0
+        if du < 0.026:
+            return seam
+        col = tint_add(base, tones[k][0 if u < off or (off == 0.0) else 1])
+        if fv < 0.32:
+            col = tint_add(col, 12)
+        elif fv > 0.86:
+            col = tint_add(col, -10)
+        if (x, y) in grain:
+            col = tint_add(col, -12)
+        return col
+    return pattern_tile(fn)
+
+
+def grass_tile(variant):
+    """Rumput: dua tona (jalur mesin rumput) dengan bilah terang/gelap rawak."""
+    base = (110, 172, 74) if variant == 'a' else (98, 158, 64)
+    rnd = random.Random(41 if variant == 'a' else 42)
+    noise = {(x, y): rnd.random() for y in range(28) for x in range(56)}
+
+    def fn(u, v, x, y):
+        r = noise[(x, y)]
+        if r < 0.14:
+            return tint_add(base, 20)
+        if r < 0.27:
+            return tint_add(base, -16)
+        if r < 0.30 and noise.get((x, y + 1), 1) < 0.5:
+            return tint_add(base, 30)
+        return base + (255,)
+    return pattern_tile(fn)
+
+
+def carpet_tile(variant):
+    """Permaidani pejabat eksekutif kelabu-biru, tekstur halus + garis jubin karpet samar."""
+    base = (122, 134, 156) if variant == 'a' else (114, 126, 148)
+    rnd = random.Random(51 if variant == 'a' else 52)
+    noise = {(x, y): rnd.random() for y in range(28) for x in range(56)}
+
+    def fn(u, v, x, y):
+        col = base + (255,)
+        if (x + 2 * y) % 4 == 0:
+            col = tint_add(col, -5)
+        r = noise[(x, y)]
+        if r < 0.08:
+            col = tint_add(col, 7)
+        elif r < 0.14:
+            col = tint_add(col, -7)
+        return col
+    return pattern_tile(fn, edge=tint_add(base, -12))
+
+
+def multifloor_assets():
+    out = {
+        'stairs': stairs(), 'stair_hut': stair_hut(), 'training_desk': training_desk(),
+        'projector_screen': projector_screen(), 'whiteboard': whiteboard(), 'coffee_table': coffee_table(),
+        'exec_desk': exec_desk(), 'glass_a': glass_wall(), 'glass_b': glass_wall().transpose(Image.FLIP_LEFT_RIGHT),
+        'arcade': arcade(), 'tv_console': tv_console(),
+        **{f'beanbag_{name}': beanbag(color) for name, color in GOOGLE.items()},
+        'umbrella_table': umbrella_table(), 'lounger': lounger(), 'bbq': bbq(), 'planter': planter(),
+        'outdoor_desk': outdoor_desk(), 'ac_unit': ac_unit(), 'pantry_counter': pantry_counter(),
+        'railing_a': railing(), 'railing_b': railing().transpose(Image.FLIP_LEFT_RIGHT),
+        'deck_a': deck_tile('a'), 'deck_b': deck_tile('b'), 'grass_a': grass_tile('a'), 'grass_b': grass_tile('b'),
+        'carpet_a': carpet_tile('a'), 'carpet_b': carpet_tile('b'),
+    }
+    return out
+
+
+def make_multifloor_preview(folder, assets, base):
+    """Preview sprite baharu: grid, dan satu adegan ujian (checker lantai, dinding kaca, pagar, tangga)."""
+    folder.mkdir(parents=True, exist_ok=True)
+    names = [n for n in assets if not n.split('_')[0] in ('deck', 'grass', 'carpet')]
+    cols, cell_w, cell_h = 6, 80, 120
+    sheet = Image.new('RGBA', (cols * cell_w, ((len(names) + cols - 1) // cols) * cell_h), (190, 140, 90, 255))
+    for i, name in enumerate(names):
+        img = assets[name]
+        sheet.alpha_composite(img, ((i % cols) * cell_w + (cell_w - img.width) // 2, (i // cols) * cell_h + cell_h - img.height - 4))
+    sheet.resize((sheet.width * 2, sheet.height * 2), Image.NEAREST).save(folder / 'preview_multifloor.png')
+
+    # Adegan: 12 x 9 grid. Zon: kayu (floor), karpet, dek, rumput.
+    gc, gr = 12, 9
+    W, Hh = (gc + gr) * 28 + 40, (gc + gr) * 14 + 160
+    ox, oy = gr * 28 + 20, 130
+    scene = Image.new('RGBA', (W, Hh), (60, 64, 72, 255))
+    center = lambda c, r: (ox + (c - r) * 28, oy + (c + r) * 14)
+
+    def tile_kind(c, r):
+        if c >= 8 and r >= 5:
+            return 'grass'
+        if c >= 8 or r >= 6:
+            return 'deck'
+        if c <= 3 and r <= 3:
+            return 'carpet'
+        return 'floor'
+    for r in range(gr):
+        for c in range(gc):
+            k = tile_kind(c, r)
+            t = (base if k == 'floor' else assets)[f'{k}_{"a" if (c + r) % 2 == 0 else "b"}']
+            x, y = center(c, r)
+            scene.alpha_composite(t, (x - 28, y - 14))
+    items = []
+    for c in range(0, 4):
+        items.append(('glass_a', c, 4))
+    for r in range(0, 4):
+        items.append(('glass_b', 4, r))
+    items += [('exec_desk', 1, 1), ('chair_blue', 1, 2), ('stairs', 6, 2), ('arcade', 5, 0), ('tv_console', 7, 0),
+              ('beanbag_red', 6, 4), ('beanbag_yellow', 7, 4), ('coffee_table', 2, 6), ('whiteboard', 5, 5),
+              ('projector_screen', 6, 5), ('training_desk', 3, 7), ('outdoor_desk', 1, 7),
+              ('umbrella_table', 9, 2), ('lounger', 10, 3), ('bbq', 10, 6), ('planter', 9, 7), ('ac_unit', 11, 1),
+              ('stair_hut', 10, 0), ('pantry_counter', 0, 5), ('chair_green', 3, 8)]
+    for c in range(gc):
+        items.append(('railing_a', c, gr - 1))
+    for r in range(gr):
+        items.append(('railing_b', gc - 1, r))
+    extra = {'chair_blue': chair(G_BLUE), 'chair_green': chair(G_GREEN)}
+    for kind, c, r in sorted(items, key=lambda t: (t[1] + t[2], t[0].startswith('railing'))):
+        img = assets.get(kind) or extra[kind]
+        x, y = center(c, r)
+        scene.alpha_composite(img, (x - img.width // 2, y + 14 - img.height))
+    scene.resize((W * 2, Hh * 2), Image.NEAREST).save(folder / 'preview_multifloor_scene.png')
+
+
 def build(preview=None):
     OUT.mkdir(parents=True, exist_ok=True)
 
@@ -2161,10 +3174,15 @@ def build(preview=None):
     for name, img in assets.items():
         img.save(OUT / f'{name}.png')
 
-    print(f'{len(assets) + len(walls) + len(staff)} fail ditulis ke {OUT}')
+    multi = multifloor_assets()
+    for name, img in multi.items():
+        img.save(OUT / f'{name}.png')
+
+    print(f'{len(assets) + len(walls) + len(staff) + len(multi)} fail ditulis ke {OUT}')
 
     if preview:
         make_preview(Path(preview), {**assets, 'wall_dartboard_b': walls['wall_dartboard_b'], 'wall_door_b': walls['wall_door_b']})
+        make_multifloor_preview(Path(preview), multi, assets)
 
 
 def make_preview(folder, assets):
@@ -2188,8 +3206,8 @@ def make_preview(folder, assets):
                     ((245, 208, 176), (24, 20, 18))]
 
     def style_strip(style, rows=combos):
-        if style in VENDOR_STYLES:
-            rows = [(VENDOR_TINT[style], sk, hr) for sk, hr in vendor_skins]
+        if style in VENDOR_STYLES or style in STYLE_TINT:
+            rows = [({**VENDOR_TINT, **STYLE_TINT}[style], sk, hr) for sk, hr in vendor_skins]
         prefix = SHEET_PREFIX[style]
         sheets = {n: Image.open(OUT / f'{prefix}_{n}.png') for n in ('fixed', 'skin', 'hair', 'shirt')}
         strip = Image.new('RGBA', (FW * len(FRAMES), FH * len(rows)), (200, 160, 110, 255))

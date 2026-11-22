@@ -33,7 +33,19 @@
         .muted { color: var(--muted); }
         .small { font-size: 12px; }
         main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; padding: 12px; }
+        .map-col { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; align-content: start; }
+        .canvas-wrap { position: relative; min-width: 0; }
         #office-canvas { background: #2a2219; border-radius: 8px; overflow: hidden; aspect-ratio: 1440 / 860; width: 100%; }
+        /* Tab aras di atas canvas */
+        .floor-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+        .floor-tabs button { display: inline-flex; align-items: center; gap: 6px; font-family: inherit; font-size: 13px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); cursor: pointer; white-space: nowrap; }
+        .floor-tabs button:hover { color: var(--text); border-color: var(--accent); }
+        .floor-tabs button.active { background: var(--accent); border-color: var(--accent); color: #1d1a17; font-weight: 600; }
+        .floor-tabs .n { font-size: 11px; min-width: 18px; text-align: center; padding: 0 6px; border-radius: 999px; background: #1f1b18; color: var(--muted); font-weight: normal; font-variant-numeric: tabular-nums; }
+        .floor-tabs button.active .n { background: rgba(29, 26, 23, 0.25); color: #1d1a17; }
+        .back-btn { position: absolute; top: 10px; left: 10px; z-index: 3; font-family: inherit; font-size: 12px; padding: 5px 10px; border-radius: 6px; border: 1px solid var(--line); background: rgba(42, 37, 33, 0.92); color: var(--text); cursor: pointer; }
+        .back-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .back-btn[hidden] { display: none; }
         /* Sidebar sentiasa nampak di sebelah peta: melekat di atas dan boleh scroll sendiri bila panjang */
         aside { display: grid; gap: 12px; align-content: start; position: sticky; top: 12px; align-self: start; max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
         section { background: var(--panel); border-radius: 8px; padding: 10px 12px; }
@@ -111,14 +123,19 @@
         html.tv .brand .by { font-size: 10px; margin-top: 0; }
         html.tv main { position: fixed; inset: 0; padding: 0; display: grid; place-items: center; gap: 0; }
         html.tv #office-canvas { width: min(100vw, calc(100vh * 1440 / 860)); height: auto; border-radius: 0; }
+        html.tv .floor-tabs { position: fixed; top: 10px; right: 12px; z-index: 6; }
+        html.tv .floor-tabs button { background: rgba(42, 37, 33, 0.85); }
+        html.tv .back-btn { display: none; }
         html.tv.tv-idle, html.tv.tv-idle * { cursor: none !important; }
         @media (max-width: 860px) {
             main { grid-template-columns: 1fr; padding: 8px; }
             .brand .by { font-size: 11px; }
             header { flex-wrap: wrap; padding: 8px 10px; }
             .head-right { flex-wrap: wrap; gap: 6px; }
-            /* Telefon: peta melekat di atas, panel Team di bawahnya boleh discroll */
-            #office-canvas { position: sticky; top: 0; z-index: 4; }
+            /* Telefon: tab + peta melekat di atas, panel Team di bawahnya boleh discroll */
+            .map-col { position: sticky; top: 0; z-index: 4; background: var(--bg); padding-bottom: 4px; }
+            .floor-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+            .floor-tabs button { padding: 4px 10px; font-size: 12px; }
             aside { position: static; max-height: none; overflow: visible; }
         }
     </style>
@@ -144,7 +161,13 @@
         </div>
     </header>
     <main>
-        <div id="office-canvas"></div>
+        <div class="map-col">
+            <nav id="floor-tabs" class="floor-tabs" aria-label="Aras bangunan"></nav>
+            <div class="canvas-wrap">
+                <div id="office-canvas"></div>
+                <button type="button" id="back-building" class="back-btn" hidden>&larr; Kembali ke bangunan</button>
+            </div>
+        </div>
         <aside>
             <details class="fold" open>
                 <summary>Team</summary>
@@ -173,7 +196,7 @@
                 <div class="fold-body" id="panel-board"><p class="muted small">Memuatkan...</p></div>
             </details>
             <section id="detail">
-                <p class="muted">Klik staff (dalam office atau senarai Team) untuk tengok butiran dan tukar nama atau department.</p>
+                <p class="muted">Klik staff (dalam office atau senarai Team) untuk tengok butiran dan tukar nama atau department. Klik satu aras dalam paparan bangunan untuk zoom masuk.</p>
             </section>
         </aside>
     </main>

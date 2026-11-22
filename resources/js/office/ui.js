@@ -1,4 +1,4 @@
-import { AVATARS, AVATAR_LABELS, DEPARTMENTS, VENDOR_COLORS } from './layout';
+import { AVATARS, AVATAR_LABELS, DEPARTMENTS, FLOORS, VENDOR_COLORS, floorOf } from './layout';
 import { applyBroadcast, getAgent, getEventsFor } from './state';
 import { esc, hex, fmtNum, lsGet, lsSet, relTime } from './util';
 
@@ -24,6 +24,66 @@ const STATUS_COLOR = {
 };
 
 let selectedId = null;
+let onFocus = () => {};
+
+// Dipanggil bila staff dipilih dari senarai Team: scene zoom ke aras staff itu
+export function setOnFocus(fn) {
+    onFocus = fn;
+}
+
+// Tag pendek aras: 'L1', 'L2', 'L3', 'Rooftop'
+export function floorTag(id) {
+    const f = FLOORS.find((x) => x.id === id);
+    if (!f) return '';
+    return /^level/i.test(f.label ?? '') ? f.key : f.label;
+}
+
+// Kiraan staff setiap aras (ikut department sasaran). { building: jumlah, [floorId]: n }
+export function countByFloor(agents) {
+    const counts = { building: 0 };
+    for (const f of FLOORS) counts[f.id] = 0;
+    for (const a of agents) {
+        if (a.status === 'ended') continue;
+        const f = floorOf(a.department ?? 'door');
+        counts[f] = (counts[f] ?? 0) + 1;
+        counts.building++;
+    }
+    return counts;
+}
+
+// Tab aras di atas canvas: Bangunan | L1 | L2 | L3 | Rooftop, setiap satu dengan kiraan staff
+let activeView = 'building';
+
+export function initFloorTabs({ onView }) {
+    const nav = el('floor-tabs');
+    if (nav) {
+        const tabs = [{ view: 'building', label: 'Bangunan' }, ...FLOORS.map((f) => ({ view: String(f.id), label: floorTag(f.id), title: `${f.label} · ${f.name}` }))];
+        nav.innerHTML = tabs.map((t) => `<button type="button" data-view="${esc(t.view)}"${t.title ? ` title="${esc(t.title)}"` : ''}>${esc(t.label)} <span class="n">0</span></button>`).join('');
+        nav.querySelectorAll('button').forEach((b) => {
+            b.addEventListener('click', () => onView(b.dataset.view === 'building' ? 'building' : Number(b.dataset.view)));
+        });
+    }
+    el('back-building')?.addEventListener('click', () => onView('building'));
+    setActiveView(activeView);
+}
+
+export function setActiveView(view) {
+    activeView = view;
+    el('floor-tabs')?.querySelectorAll('button').forEach((b) => {
+        const on = b.dataset.view === String(view);
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    const back = el('back-building');
+    if (back) back.hidden = view === 'building';
+}
+
+export function updateFloorTabs(counts) {
+    el('floor-tabs')?.querySelectorAll('button').forEach((b) => {
+        const n = b.querySelector('.n');
+        if (n) n.textContent = String(counts[b.dataset.view] ?? 0);
+    });
+}
 
 const el = (id) => document.getElementById(id);
 
@@ -91,6 +151,14 @@ function endedSection() {
     return `<details class="ended" ${endedOpen ? 'open' : ''}><summary>Tamat 24 jam <span class="count">${list.length}</span></summary><ul>${rows}</ul></details>`;
 }
 
+// 'L2 · IT · Backend'
+function teamPlace(key) {
+    const dept = DEPARTMENTS[key];
+    if (!dept) return '';
+    const tag = floorTag(floorOf(key));
+    return tag ? `${tag} · ${dept.label}` : dept.label;
+}
+
 export function renderTeam(agents, ended = lastEnded) {
     const node = el('team');
     if (!node) return;
@@ -114,7 +182,7 @@ export function renderTeam(agents, ended = lastEnded) {
                 <span class="name">${esc(a.name)}</span>
                 <span class="meta">${esc(a.label)}</span>
                 <span class="status" style="color:${STATUS_COLOR[a.status] ?? '#a89c8c'}">${esc(STATUS_LABEL[a.status] ?? a.status)}</span>
-                <span class="task">${esc(DEPARTMENTS[a.department]?.label ?? '')}${a.current_task ? ' · ' + esc(a.current_task) : ''}</span>
+                <span class="task">${esc(teamPlace(a.department))}${a.current_task ? ' · ' + esc(a.current_task) : ''}</span>
             </li>`).join('');
 
         return `<h3>${esc(project)} <span class="count">${groups[project].length}</span></h3><ul>${rows}</ul>`;
@@ -125,7 +193,11 @@ export function renderTeam(agents, ended = lastEnded) {
         : '<p class="muted">Tiada agent lagi. Jalankan <code>php artisan office:simulate</code>.</p>';
     node.innerHTML = (html || (lastEnded.length ? '<p class="muted">Tiada agent aktif sekarang.</p>' : empty)) + endedSection();
     node.querySelectorAll('.row').forEach((row) => {
-        row.addEventListener('click', () => showDetail(Number(row.dataset.id)));
+        row.addEventListener('click', () => {
+            const id = Number(row.dataset.id);
+            showDetail(id);
+            if (!row.classList.contains('ended-row')) onFocus(id);
+        });
     });
     node.querySelector('details.ended')?.addEventListener('toggle', (ev) => {
         endedOpen = ev.currentTarget.open;
@@ -164,9 +236,13 @@ function buildDetail() {
     const a = selectedId !== null ? getAgent(selectedId) : null;
     if (!a) return;
 
-    const options = CONFIG.departments
-        .map((k) => `<option value="${esc(k)}" ${a.pinned_department === k ? 'selected' : ''}>${esc(deptLabel(k))}</option>`)
-        .join('');
+    // Department dikumpul ikut aras (optgroup)
+    const option = (k) => `<option value="${esc(k)}" ${a.pinned_department === k ? 'selected' : ''}>${esc(deptLabel(k))}</option>`;
+    const options = FLOORS.map((f) => {
+        const keys = CONFIG.departments.filter((k) => floorOf(k) === f.id);
+        if (!keys.length) return '';
+        return `<optgroup label="${esc(`${f.label} · ${f.name}`)}">${keys.map(option).join('')}</optgroup>`;
+    }).join('') + CONFIG.departments.filter((k) => !FLOORS.some((f) => f.id === floorOf(k))).map(option).join('');
 
     const avatarOptions = AVATARS
         .map((k) => `<option value="${esc(k)}" ${(a.avatar ?? 'default') === k ? 'selected' : ''}>${esc(AVATAR_LABELS[k] ?? k)}</option>`)
@@ -223,7 +299,7 @@ export function refreshDetail() {
         <dt>Vendor</dt><dd>${esc(a.label)}</dd>
         <dt>PC</dt><dd>${esc(a.pc ?? '-')}</dd>
         <dt>Projek</dt><dd>${esc(a.project ?? '-')}</dd>
-        <dt>Department</dt><dd>${esc(deptLabel(a.department))}${a.pinned_department ? ' <span class="pin">dipin</span>' : ''}</dd>
+        <dt>Department</dt><dd>${a.department && DEPARTMENTS[a.department] ? esc(floorTag(floorOf(a.department))) + ' · ' : ''}${esc(deptLabel(a.department))}${a.pinned_department ? ' <span class="pin">dipin</span>' : ''}</dd>
         <dt>Status</dt><dd>${esc(STATUS_LABEL[a.status] ?? a.status)}</dd>
         <dt>Task</dt><dd>${esc(a.current_task ?? '-')}</dd>${tokenRow(a.usage)}`;
 

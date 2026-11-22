@@ -81,7 +81,7 @@ class AgentOverrideTest extends TestCase
         $agent = $this->agent();
 
         $this->actingAs($this->user('owner'))
-            ->patchJson("/office/agents/{$agent->id}", ['department' => 'rooftop'])
+            ->patchJson("/office/agents/{$agent->id}", ['department' => 'basement'])
             ->assertStatus(422);
     }
 
