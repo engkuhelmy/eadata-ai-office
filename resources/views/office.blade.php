@@ -34,7 +34,8 @@
         .small { font-size: 12px; }
         main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 12px; padding: 12px; }
         #office-canvas { background: #2a2219; border-radius: 8px; overflow: hidden; aspect-ratio: 1440 / 860; width: 100%; }
-        aside { display: grid; gap: 12px; align-content: start; }
+        /* Sidebar sentiasa nampak di sebelah peta: melekat di atas dan boleh scroll sendiri bila panjang */
+        aside { display: grid; gap: 12px; align-content: start; position: sticky; top: 12px; align-self: start; max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
         section { background: var(--panel); border-radius: 8px; padding: 10px 12px; }
         section h2 { font-size: 14px; margin: 0 0 8px; color: var(--accent); }
         h3 { font-size: 13px; margin: 10px 0 4px; }
@@ -114,6 +115,11 @@
         @media (max-width: 860px) {
             main { grid-template-columns: 1fr; padding: 8px; }
             .brand .by { font-size: 11px; }
+            header { flex-wrap: wrap; padding: 8px 10px; }
+            .head-right { flex-wrap: wrap; gap: 6px; }
+            /* Telefon: peta melekat di atas, panel Team di bawahnya boleh discroll */
+            #office-canvas { position: sticky; top: 0; z-index: 4; }
+            aside { position: static; max-height: none; overflow: visible; }
         }
     </style>
 </head>
