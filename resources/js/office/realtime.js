@@ -9,7 +9,9 @@ export function connectRealtime({ onSnapshot, onAgent, onStatus }) {
 
     async function sync() {
         try {
-            const res = await fetch('/office/state', {
+            const embed = window.OFFICE?.embed;
+            const url = embed ? `/embed/state${window.location.search}` : '/office/state';
+            const res = await fetch(url, {
                 headers: { Accept: 'application/json' },
                 credentials: 'same-origin',
             });
@@ -22,6 +24,7 @@ export function connectRealtime({ onSnapshot, onAgent, onStatus }) {
     }
 
     try {
+        if (window.OFFICE?.embed) throw new Error('embed: polling sahaja');
         window.Echo.private('office').listen('.agent.updated', ({ agent, event }) => {
             onAgent(agent, event ?? null);
         });

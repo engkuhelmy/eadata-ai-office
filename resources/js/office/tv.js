@@ -1,5 +1,5 @@
 // Mod TV (?tv=1): sembunyi kursor bila tak bergerak.
-export const isTv = new URLSearchParams(window.location.search).get('tv') === '1';
+export const isTv = new URLSearchParams(window.location.search).get('tv') === '1' || !!window.OFFICE?.embed;
 
 export function initTv() {
     if (!isTv) return;

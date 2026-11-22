@@ -58,7 +58,7 @@ if (-not $Dry -and -not (Test-Path $LogDir)) { New-Item -ItemType Directory -Pat
 # ---------- Definisi service ----------
 # Pattern = regex untuk kenal command line php.exe yang berkaitan.
 $Services = @(
-    @{ Name = 'serve';    Args = @('serve', '--host=127.0.0.1', '--port=8000', '--no-reload'); Pattern = 'artisan"?\s+serve(\s|$)' }
+    @{ Name = 'serve';    Args = @('serve', '--host=0.0.0.0', '--port=8000', '--no-reload'); Pattern = 'artisan"?\s+serve(\s|$)' }
     @{ Name = 'reverb';   Args = @('reverb:start');                                            Pattern = 'artisan"?\s+reverb:start' }
     @{ Name = 'queue';    Args = @('queue:work', '--tries=3', '--sleep=1');                    Pattern = 'artisan"?\s+queue:work' }
     @{ Name = 'schedule'; Args = @('schedule:work');                                           Pattern = 'artisan"?\s+schedule:work' }

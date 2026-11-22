@@ -10,6 +10,7 @@ use App\Office\OfficePresenter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Throwable;
@@ -22,6 +23,60 @@ class OfficeController extends Controller
             'canEdit' => $request->user()?->role === 'owner',
             'departments' => DepartmentRouter::DEPARTMENTS,
         ]);
+    }
+
+    /** Semak ?key= untuk embed awam. 404 bila key tak sah / embed dimatikan. */
+    private function guardEmbed(Request $request): void
+    {
+        $expected = (string) config('office.embed_key');
+        abort_unless($expected !== '' && hash_equals($expected, (string) $request->query('key', '')), 404);
+    }
+
+    public function embed(Request $request)
+    {
+        $this->guardEmbed($request);
+
+        return response()
+            ->view('office', [
+                'canEdit' => false,
+                'departments' => DepartmentRouter::DEPARTMENTS,
+                'embed' => true,
+            ])
+            ->header('Content-Security-Policy', 'frame-ancestors '.config('office.embed_origins'));
+    }
+
+    /** Snapshot awam: nama, avatar, department, status sahaja. Tiada projek, PC, tugas, token. */
+    public function embedState(Request $request): JsonResponse
+    {
+        $this->guardEmbed($request);
+
+        // Cache 2s: ramai pelawat landing page berkongsi satu query
+        $agents = Cache::remember('office.embed.agents', 2, fn () => Agent::query()
+            ->whereNull('ended_at')
+            ->orderByDesc('last_event_at')
+            ->limit(60)
+            ->get()
+            ->map(fn (Agent $a) => [
+                'id' => $a->id,
+                'vendor' => $a->vendor,
+                'label' => $a->label,
+                'name' => $a->displayName(),
+                'avatar' => $a->avatar ?? 'default',
+                'department' => $a->effectiveDepartment(),
+                'status' => $a->status,
+                'current_task' => null,
+                'last_event_at' => $a->last_event_at?->toIso8601String(),
+                'ended_at' => null,
+            ])
+            ->values()
+            ->all());
+
+        return response()->json([
+            'agents' => $agents,
+            'ended' => [],
+            'events' => [],
+            'generated_at' => now()->toIso8601String(),
+        ])->header('Access-Control-Allow-Origin', '*');
     }
 
     /** Snapshot untuk reload page + fallback polling (setiap 3s). */

@@ -10,6 +10,12 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:login');
 });
 
+// Embed awam (iframe di kerjaai.my): paparan bangunan sahaja, data disanitasi, dilindungi ?key=
+Route::middleware('throttle:120,1')->group(function () {
+    Route::get('/embed', [OfficeController::class, 'embed'])->name('office.embed');
+    Route::get('/embed/state', [OfficeController::class, 'embedState'])->name('office.embed.state');
+});
+
 Route::post('/logout', [LoginController::class, 'destroy'])->name('logout')->middleware('auth');
 
 Route::middleware('auth')->group(function () {

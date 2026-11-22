@@ -10,10 +10,12 @@
             canEdit: @json($canEdit),
             departments: @json($departments),
             csrf: @json(csrf_token()),
+            embed: @json($embed ?? false),
         };
     </script>
     <script>
-        if (new URLSearchParams(location.search).get('tv') === '1') document.documentElement.classList.add('tv');
+        if (new URLSearchParams(location.search).get('tv') === '1' || window.OFFICE.embed) document.documentElement.classList.add('tv');
+        if (window.OFFICE.embed) document.documentElement.classList.add('embed');
     </script>
     @vite(['resources/js/office/main.js'])
     <style>
@@ -126,6 +128,9 @@
         html.tv .floor-tabs { position: fixed; top: 10px; right: 12px; z-index: 6; }
         html.tv .floor-tabs button { background: rgba(42, 37, 33, 0.85); }
         html.tv .back-btn { display: none; }
+        html.tv.embed header, html.tv.embed .floor-tabs { display: none; }
+        html.tv.embed .map-col, html.tv.embed .canvas-wrap { width: 100vw; height: 100vh; }
+        html.tv.embed #office-canvas { width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; }
         html.tv.tv-idle, html.tv.tv-idle * { cursor: none !important; }
         @media (max-width: 860px) {
             main { grid-template-columns: 1fr; padding: 8px; }

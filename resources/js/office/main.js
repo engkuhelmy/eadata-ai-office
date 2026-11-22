@@ -26,7 +26,7 @@ let tvTimer = null;
 const setView = (view) => {
     scene.setView(view);
     if (!isTv) lsSet(VIEW_KEY, String(view));
-    if (isTv) restartTvCycle();
+    if (isTv && !window.OFFICE.embed) restartTvCycle();
 };
 
 initTv();
@@ -91,7 +91,7 @@ function restartTvCycle() {
         }
     }, TV_CYCLE_MS);
 }
-if (isTv) restartTvCycle();
+if (isTv && !window.OFFICE.embed) restartTvCycle();
 
 connectRealtime({
     onSnapshot: (data) => store.setSnapshot(data),
