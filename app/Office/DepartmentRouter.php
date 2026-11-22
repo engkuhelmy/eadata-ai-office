@@ -8,6 +8,8 @@ class DepartmentRouter
         'door', 'kanban', 'frontend', 'backend', 'qa', 'deploy', 'research',
         'ops', 'meeting', 'approval', 'coffee', 'water_cooler', 'playroom',
         'boardroom', 'pantry', 'toilet',
+        // Kaunter reception: tetamu/penghantar berdiri di depan kaunter, penyambut tetamu di belakang (frontdesk).
+        'reception', 'frontdesk',
     ];
 
     private const FRONTEND_EXT = ['vue', 'tsx', 'jsx', 'css', 'scss', 'html'];

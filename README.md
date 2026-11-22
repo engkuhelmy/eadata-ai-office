@@ -44,6 +44,16 @@ python hooks\install-hooks.py --url http://127.0.0.1:8000 --token eod_xxx --tool
 
 Buang `--dry-run` untuk pasang. `--uninstall` untuk buang. Codex perlu `/hooks` trust selepas pasang.
 
+## Demo 24 jam
+
+`php artisan office:demo` (atau `scripts\start-demo.ps1`) jalankan 13 staff demo (briefing boardroom, kerja, tandas, pantri maks 2 orang, chill room) dan **modul reception**:
+
+- Penyambut tetamu AI **Reni** (`demo-reception`, avatar `recep`) duduk di kaunter reception (department `frontdesk`). Jumlah staff demo = 14.
+- Penghantar Grab, ShopeeFood, J&T dan DHL (`demo-visit-<brand>-<n>`) tiba bergilir satu demi satu: muncul di pintu (`door`), loceng berbunyi, masuk ke kaunter sahaja (`reception`), serah makanan/parcel, kemudian keluar (`session_end`). Barisnya dipadam ~25s selepas keluar.
+- Lepas tiap serahan Reni buat pusingan 3-4 hentian (mula di meja penerima) hantar arahan, kemudian pulang ke `frontdesk`. Tiada penghantaran 3 minit = Reni buat pusingan sendiri.
+- Matikan modul: `php artisan office:demo --no-reception`.
+- Sesi staff `demo-*` tak pernah ditamatkan; hanya penghantar (`demo-visit-*`) tamat sendiri. Logik di `app/Office/Demo/ReceptionModule.php`.
+
 ## Ujian
 
 ```powershell

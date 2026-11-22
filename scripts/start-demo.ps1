@@ -1,5 +1,5 @@
 <#
-  start-demo.ps1: mulakan demo 5 staff (office:demo) di latar, 24 jam.
+  start-demo.ps1: mulakan demo 13 staff + penyambut tetamu (office:demo) di latar, 24 jam.
   Mesyuarat ramai-ramai, kerja di meja, chill. Sesi demo TIDAK ditamatkan.
   Guna: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\start-demo.ps1 [-Hours 24] [-Speed 1] [-Dry]
   Prasyarat: web, Reverb, queue worker dan scheduler jalan (scripts\start-office.ps1).

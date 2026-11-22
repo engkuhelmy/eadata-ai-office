@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
-import { AVATARS, GRID, TILE, ORIGIN, CANVAS, DEPARTMENTS, DEPT_BUBBLE, DECOR, VENDOR_COLORS, allSeats, blockedTiles, capacityFor, queueFor, seatsFor, spotFor, standsFor } from './layout';
+import { AVATARS, GRID, TILE, ORIGIN, CANVAS, DEPARTMENTS, DEPT_BUBBLE, DECOR, VENDOR_COLORS, STYLE_SHIRT, VISITOR_STYLES, allSeats, blockedTiles, capacityFor, queueFor, seatsFor, spotFor, standsFor } from './layout';
 import { findPath } from './pathfinding';
 
 const WALK_SPEED = 110; // px per saat
 const EXIT_DELAY_MS = 10000; // staff hilang 10s lepas sampai pintu
+const VISITOR_EXIT_DELAY_MS = 1500; // pelawat (rider/kurier) hilang cepat selepas sampai pintu
 const WALL_H = 130;
 // Kerusi (dan staff yang duduk) dirapatkan ke meja: 40% ke arah tile meja (c, r-1)
 const SEAT_SHIFT = { x: 11, y: -6 };
@@ -18,6 +19,11 @@ const STYLE_HAIR = {
     woman: [0x2a2219, 0x4a2c1a, 0x6d4c2a, 0x1f2937, 0x7c2d12],
     hiphop: [0x1a1a1a, 0x2a2219, 0x3f3f46],
     genz: [0xff6fae, 0x6ee7b7, 0xa78bfa, 0x60a5fa, 0xfbbf24],
+    recep: [0x3b2417, 0x2a1a10, 0x4a2c1a],
+    grab: [0x1a1a1a, 0x2a2219, 0x15151a],
+    shopee: [0x1a1a1a, 0x2a2219, 0x15151a],
+    jnt: [0x1a1a1a, 0x2a2219, 0x15151a],
+    dhl: [0x1a1a1a, 0x2a2219, 0x15151a],
 };
 const styleOf = (agent) => (AVATARS.includes(agent.avatar) ? agent.avatar : 'default');
 const GOOGLE_HEX = [0x4285f4, 0xea4335, 0xfbbc05, 0x34a853];
@@ -209,13 +215,13 @@ export default class OfficeScene extends Phaser.Scene {
                 this.load.spritesheet(texKey(style, layer), `/assets/office/${texFile(style, layer)}.png`, { frameWidth: 32, frameHeight: 48 });
             }
         }
-        for (const name of ['wall_window_a', 'wall_window_b', 'wall_board_a', 'wall_cork_b', 'wall_poster_a1', 'wall_poster_a2', 'wall_poster_b', 'wall_logo_b',
+        for (const name of ['wall_window_a', 'wall_window_b', 'wall_board_a', 'wall_cork_b', 'wall_poster_a1', 'wall_poster_a2', 'wall_poster_b', 'wall_door_b',
             'wall_dartboard_b', 'partition_a', 'partition_b', 'partition_a_logo', 'partition_b_logo']) {
             this.load.image(name, `/assets/office/${name}.png`);
         }
         for (const name of ['floor_a', 'floor_b', 'desk', 'plant', 'shelf', 'cooler', 'machine', 'server', 'pong', 'foos', 'table', 'reception', 'bell',
             'snooker', 'fridge', 'wc', 'sink', 'boardtable',
-            'machine_starbucks', 'machine_zus', 'icecream', 'chiller_redbull',
+            'machine_starbucks', 'machine_zus', 'icecream', 'chiller_redbull', 'counter_parcels',
             ...GOOGLE_COLORS.map((c) => `chair_${c}`), ...GOOGLE_COLORS.map((c) => `sofa_${c}`)]) {
             this.load.image(name, `/assets/office/${name}.png`);
         }
@@ -236,6 +242,12 @@ export default class OfficeScene extends Phaser.Scene {
         this.drawStatic();
         this.drawLabels();
         this.addAmbient();
+
+        // Bungkusan di kaunter reception (tersembunyi sampai pelawat serah barang)
+        this.parcelWanted = false;
+        this.recepAway = false;
+        this.handoverIds = new Set();
+        this.parcels = this.textures.exists('counter_parcels') ? this.placeSprite('counter_parcels', 4, 13, 4 + 13 + 0.1).setAlpha(0) : null;
 
         // Cahaya siang neutral-hangat
         this.lighting = this.add
@@ -335,7 +347,7 @@ export default class OfficeScene extends Phaser.Scene {
         this.wallSprite('wall_poster_a1', 'A', 12.6, 102);
         this.wallSprite('wall_poster_a2', 'A', 20.5, 102);
         this.wallSprite('wall_poster_b', 'B', 9, 102);
-        this.wallSprite('wall_logo_b', 'B', 13.2, 92); // logo di sebelah reception
+        this.drawEntrance();
         this.wallSprite('wall_dartboard_b', 'B', 17.2, 86); // papan dart di chill room
         this.wallSprite('wall_window_b', 'B', 19.4, 106);
 
@@ -364,8 +376,143 @@ export default class OfficeScene extends Phaser.Scene {
         return this.add.image(p.x, p.y, key).setOrigin(wall === 'A' ? 0 : 1, 0).setDepth(-890);
     }
 
+    // Pintu masuk di dinding B (di tengah tile pintu, r=14.5) + butang loceng di sebelahnya.
+    // Sprite di-shear: tinggi tekstur = tinggi asal + lebar/2, jadi tinggi asal (vTop) = H - floor(W/2).
+    drawEntrance() {
+        const doorSpot = spotFor('door');
+        let bellU = doorSpot.r + 2;
+
+        if (this.textures.exists('wall_door_b')) {
+            const src = this.textures.get('wall_door_b').getSourceImage();
+            const w = src.width;
+            const vTop = src.height - Math.floor(w / 2);
+            const u0 = doorSpot.r + 0.5 - w / 56;
+            this.wallSprite('wall_door_b', 'B', u0, vTop);
+            bellU = u0 + w / 28 + 0.4;
+        }
+
+        // Pelat loceng pada dinding + butang merah
+        const g = this.wallGfx;
+        wallQuad(g, 'B', bellU - 0.13, bellU + 0.13, 42, 62, 0xdadce0);
+        outline(g, [wallPt('B', bellU - 0.13, 42), wallPt('B', bellU + 0.13, 42), wallPt('B', bellU + 0.13, 62), wallPt('B', bellU - 0.13, 62)], 0x8a8f98, 1);
+
+        const p = wallPt('B', bellU, 52);
+        this.bellPos = { x: p.x, y: p.y };
+        this.bellGlow = this.add.circle(p.x, p.y, 7, 0xfbbc05, 0).setBlendMode(Phaser.BlendModes.ADD).setDepth(-880);
+        this.bellBtn = this.add.circle(p.x, p.y, 3.5, 0xea4335).setStrokeStyle(1, 0x3a2414).setDepth(-879);
+    }
+
+    // Loceng pintu: butang berdenyut dan bergetar, gelombang bunyi, teks "Ding dong!", bunyi chime (kalau dibenarkan browser)
+    ringDoorbell() {
+        if (!this.bellBtn || !this.bellPos) return;
+        const now = this.time.now;
+        if (now - (this.lastRing ?? -1e9) < 1500) return;
+        this.lastRing = now;
+
+        const { x, y } = this.bellPos;
+        this.tweens.add({ targets: this.bellBtn, scale: { from: 0.7, to: 1.3 }, duration: 110, yoyo: true, repeat: 2 });
+        this.tweens.add({ targets: this.bellBtn, x: x + 1.5, duration: 40, yoyo: true, repeat: 7, onComplete: () => this.bellBtn.setX(x) });
+        this.bellGlow.setAlpha(0.8).setScale(1);
+        this.tweens.add({ targets: this.bellGlow, alpha: 0, scale: 2.4, duration: 900 });
+
+        for (let i = 0; i < 3; i++) {
+            this.time.delayedCall(i * 220, () => {
+                const ring = this.add.circle(x, y, 4, 0xffffff, 0).setStrokeStyle(2, 0xfbbc05, 0.9).setDepth(-878);
+                this.tweens.add({ targets: ring, scale: 5, alpha: 0, duration: 800, onComplete: () => ring.destroy() });
+            });
+        }
+
+        const text = this.add
+            .text(x, y - 30, 'Ding dong!', {
+                fontFamily: 'system-ui, sans-serif',
+                fontSize: '12px',
+                fontStyle: 'bold',
+                color: '#2a2219',
+                backgroundColor: '#fff3c4',
+                padding: { x: 6, y: 3 },
+            })
+            .setOrigin(0.5, 1)
+            .setDepth(60000);
+        this.tweens.add({ targets: text, y: y - 36, duration: 300, ease: 'Back.easeOut' });
+        this.tweens.add({ targets: text, alpha: 0, delay: 2500, duration: 500, onComplete: () => text.destroy() });
+
+        this.chime();
+    }
+
+    // Dua nota lembut. Senyap kalau audio disekat browser (tiada interaksi pengguna lagi). Tak pernah throw.
+    chime() {
+        try {
+            if (!navigator.userActivation?.hasBeenActive) return;
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (!AC) return;
+            this.audio ??= new AC();
+            const ctx = this.audio;
+            if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+            if (ctx.state !== 'running') return;
+
+            [[880, 0], [659, 0.24]].forEach(([freq, at]) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                const t = ctx.currentTime + at;
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0.0001, t);
+                gain.gain.exponentialRampToValueAtTime(0.05, t + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+                osc.connect(gain).connect(ctx.destination);
+                osc.start(t);
+                osc.stop(t + 0.75);
+            });
+        } catch {
+            // abaikan: bunyi hanya hiasan
+        }
+    }
+
+    // Resepsionis sampai ke satu department: sampul surat kecil naik dan lenyap (hantar arahan)
+    sendNote(s) {
+        const env = this.add.graphics().setDepth(60000);
+        env.fillStyle(0xffffff, 1).fillRect(-7, -5, 14, 10);
+        env.lineStyle(1, 0x3a2414, 1).strokeRect(-7, -5, 14, 10);
+        env.lineBetween(-7, -5, 0, 1);
+        env.lineBetween(7, -5, 0, 1);
+        env.fillStyle(0x4285f4, 1).fillCircle(5, 4, 2);
+        env.setPosition(s.pos.x + 22, s.pos.y - 32);
+        this.tweens.add({ targets: env, scale: { from: 0.5, to: 1.15 }, duration: 220, ease: 'Back.easeOut' });
+        this.tweens.add({ targets: env, y: s.pos.y - 62, x: s.pos.x + 26, alpha: 0, delay: 350, duration: 1300, onComplete: () => env.destroy() });
+    }
+
+    // Bungkusan atas kaunter: muncul bila pelawat mula serah barang, hilang bila resepsionis keluar mengedar.
+    // Alpha dilicinkan (lerp) supaya tak berkelip.
+    updateParcels(delta) {
+        if (!this.parcels) return;
+
+        const handing = new Set();
+        let recepCount = 0;
+        let recepAway = false;
+        for (const s of this.staff.values()) {
+            if (s.activity === 'handover') handing.add(s.id);
+            if (s.style === 'recep' && !s.leaving) {
+                recepCount++;
+                if (s.dept && s.dept !== 'frontdesk') recepAway = true;
+            }
+        }
+
+        if (recepAway && !this.recepAway) this.parcelWanted = false;
+        this.recepAway = recepAway;
+        for (const id of handing) {
+            if (!this.handoverIds.has(id)) this.parcelWanted = true;
+        }
+        this.handoverIds = handing;
+        if (recepCount === 0 && handing.size === 0) this.parcelWanted = false;
+
+        const target = this.parcelWanted ? 1 : 0;
+        const a = this.parcels.alpha + (target - this.parcels.alpha) * Math.min(1, delta / 180);
+        this.parcels.setAlpha(Math.abs(target - a) < 0.02 ? target : a);
+    }
+
     drawLabels() {
         for (const dept of Object.values(DEPARTMENTS)) {
+            if (dept.hideLabel) continue;
             const cell = dept.cells[0];
             const { x, y } = cell ? tileCenter(cell.c, cell.r) : tileCenter(dept.spot.c, dept.spot.r);
 
@@ -492,8 +639,8 @@ export default class OfficeScene extends Phaser.Scene {
 
     spawn(agent) {
         const offset = offsetFor(agent.id);
-        const shirt = VENDOR_COLORS[agent.vendor] ?? 0x64748b;
         const style = styleOf(agent);
+        const shirt = STYLE_SHIRT[style] ?? VENDOR_COLORS[agent.vendor] ?? 0x64748b;
         const hairs = STYLE_HAIR[style];
         const hair = hairs[hashOf(agent.id) % hairs.length];
         const start = spotFor('door');
@@ -543,6 +690,9 @@ export default class OfficeScene extends Phaser.Scene {
 
         this.tweens.add({ targets: bell, scale: { from: 1, to: 1.25 }, duration: 500, yoyo: true, repeat: -1 });
         this.tweens.add({ targets: errDot, alpha: { from: 0.3, to: 1 }, duration: 400, yoyo: true, repeat: -1 });
+
+        // Pelawat penghantaran baru tiba di pintu: tekan loceng
+        if (VISITOR_STYLES.includes(style) && agent.status !== 'ended') this.ringDoorbell();
 
         return {
             id: agent.id,
@@ -703,10 +853,12 @@ export default class OfficeScene extends Phaser.Scene {
             ['fixed', 'skin', 'hair', 'shirt'].forEach((layer, i) => s.layers[i].setTexture(texKey(style, layer)));
             const hairs = STYLE_HAIR[style];
             s.layers[2].setTint(hairs[hashOf(a.id) % hairs.length]);
+            s.layers[3].setTint(STYLE_SHIRT[style] ?? VENDOR_COLORS[a.vendor] ?? 0x64748b);
         }
 
         // Tiada tugas: bubble ikut bilik (Toilet break, Pantry, Chill...) sebelum status
-        const text = a.current_task || (s.queued ? 'Beratur...' : s.standLabel) || DEPT_BUBBLE[s.dept] || STATUS_TEXT[a.status] || '';
+        const visitorAtDoor = VISITOR_STYLES.includes(s.style) && s.dept === 'door' && !s.leaving && a.status !== 'ended';
+        const text = a.current_task || (visitorAtDoor ? 'Ding dong! Delivery' : null) || (s.queued ? 'Beratur...' : s.standLabel) || DEPT_BUBBLE[s.dept] || STATUS_TEXT[a.status] || '';
         s.bubble.setVisible(text !== '');
         if (text !== s.lastText) {
             s.lastText = text;
@@ -767,6 +919,9 @@ export default class OfficeScene extends Phaser.Scene {
         } else if (s.activity === 'dart') {
             // Lontar dart: tarik (12) lama, lontar (13) sekejap
             frame = 12 + (Math.floor(time / 450) % 3 === 2 ? 1 : 0);
+        } else if (s.activity === 'handover') {
+            // Serah bungkusan / makanan ke kaunter: tangan ke depan bergilir perlahan (frame 10-11)
+            frame = 10 + (Math.floor(time / 320) % 2);
         } else if (s.activity === 'drink') {
             // Minum di pantry (frame 14-15)
             frame = 14 + (Math.floor(time / 900) % 2);
@@ -824,6 +979,13 @@ export default class OfficeScene extends Phaser.Scene {
                 }
             }
 
+            // Resepsionis sampai ke department lain: hantar arahan (sampul surat), sekali setiap ketibaan
+            if (s.style === 'recep' && s.wasMoving && !moving && !s.leaving && s.dept && s.dept !== 'frontdesk' && time - (s.noteAt ?? -1e9) > 2500) {
+                s.noteAt = time;
+                this.sendNote(s);
+            }
+            s.wasMoving = moving;
+
             s.seated = !moving && !s.leaving && s.seat !== null && s.sitting === true;
             s.activity = !moving && !s.leaving && s.seat !== null && s.sitting !== true ? s.act : null;
             if (!moving && s.seat !== null && s.sitting !== true) s.facingLeft = s.standFlip === true;
@@ -835,7 +997,7 @@ export default class OfficeScene extends Phaser.Scene {
 
             // Sampai pintu sambil keluar: tunggu 10s, kemudian hilang
             if (!moving && s.leaving && s.tile.c === doorSpot.c && s.tile.r === doorSpot.r) {
-                if (s.exitAt === null) s.exitAt = time + EXIT_DELAY_MS;
+                if (s.exitAt === null) s.exitAt = time + (VISITOR_STYLES.includes(s.style) ? VISITOR_EXIT_DELAY_MS : EXIT_DELAY_MS);
                 if (time >= s.exitAt) {
                     this.releaseSeat(s);
                     s.container.destroy();
@@ -843,5 +1005,7 @@ export default class OfficeScene extends Phaser.Scene {
                 }
             }
         }
+
+        this.updateParcels(delta);
     }
 }

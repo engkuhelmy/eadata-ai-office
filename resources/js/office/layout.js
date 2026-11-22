@@ -16,6 +16,25 @@ export const DEPARTMENTS = {
         spot: { c: 1, r: 14 },
         cells: [{ c: 3, r: 13, kind: 'reception' }, { c: 4, r: 13, kind: 'reception' }],
     },
+    // Kaunter reception: pelawat (rider/kurier) berdiri di depan kaunter (act 'handover', maksimum 2 serentak,
+    // selebihnya beratur). Resepsionis berdiri di belakang kaunter (frontdesk) dan keluar menghantar arahan.
+    // Pelawat hanya datang dari pintu (door) lalu terus ke sini.
+    reception: {
+        label: 'Reception Counter',
+        hideLabel: true,
+        spot: { c: 3, r: 14 },
+        capacity: 2,
+        cells: [],
+        stands: [{ c: 3, r: 14, act: 'handover' }, { c: 4, r: 14, act: 'handover' }],
+        queue: [{ c: 3, r: 15 }, { c: 4, r: 15 }],
+    },
+    frontdesk: {
+        label: 'Front Desk',
+        hideLabel: true,
+        spot: { c: 3, r: 12 },
+        cells: [],
+        stands: [{ c: 3, r: 12, flip: true }, { c: 4, r: 12, flip: true }],
+    },
     kanban: {
         label: 'Marketing Plan',
         spot: { c: 2, r: 8 },
@@ -164,6 +183,8 @@ export const DEPT_BUBBLE = {
     meeting: 'Client meeting',
     coffee: 'Kopi',
     water_cooler: 'Rehat',
+    reception: 'Hantar barang',
+    frontdesk: 'Jaga kaunter',
 };
 
 // Dekor: hiasan yang juga disekat (kecuali yang tiada cells)
@@ -194,8 +215,15 @@ export const VENDOR_COLORS = {
 };
 
 // Gaya watak. 'default' guna fail staff_{layer}.png, yang lain staff_{gaya}_{layer}.png
-export const AVATARS = ['default', 'woman', 'hiphop', 'genz'];
-export const AVATAR_LABELS = { default: 'Lelaki biasa', woman: 'Wanita', hiphop: 'Hip-hop', genz: 'Gen Z' };
+export const AVATARS = ['default', 'woman', 'hiphop', 'genz', 'recep', 'grab', 'shopee', 'jnt', 'dhl'];
+export const AVATAR_LABELS = {
+    default: 'Lelaki biasa', woman: 'Wanita', hiphop: 'Hip-hop', genz: 'Gen Z',
+    recep: 'Receptionist', grab: 'Grab Food rider', shopee: 'ShopeeFood rider', jnt: 'J&T Express', dhl: 'DHL Express',
+};
+// Pelawat penghantaran: datang dari pintu, tekan loceng, terus ke kaunter reception
+export const VISITOR_STYLES = ['grab', 'shopee', 'jnt', 'dhl'];
+// Warna uniform (tint lapisan shirt) menggantikan warna vendor bila gaya ada entri di sini
+export const STYLE_SHIRT = { recep: 0x4285f4, grab: 0x00b14f, shopee: 0xee4d2d, jnt: 0xd5202a, dhl: 0xffcc00 };
 
 // Semua tile yang disekat: luar dinding, furniture, dan dekor
 export function blockedTiles() {

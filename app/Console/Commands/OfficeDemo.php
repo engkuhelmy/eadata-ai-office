@@ -4,26 +4,32 @@ namespace App\Console\Commands;
 
 use App\Jobs\ProcessAgentEvent;
 use App\Models\Agent;
+use App\Office\Demo\ReceptionModule;
 use App\Office\NormalizedEvent;
 use DateTimeImmutable;
 use Illuminate\Console\Command;
 
 /**
- * Simulasi 13 staff demo yang jalan berjam-jam.
+ * Simulasi 13 staff demo (+ penyambut tetamu AI "Reni" = 14) yang jalan berjam-jam.
  * 5 staff "team" ikut kitaran: board briefing ramai-ramai, ambil tugas di papan kanban, kerja di meja,
  * kemudian chill (sweep hantar ke chill room selepas idle 2 minit).
  * 8 staff "rotator" pusing tanpa henti: kerja -> tandas -> pantri -> chill room -> kerja, dalam semua fasa,
  * kecuali awal setiap kitaran bila semua 13 orang berkumpul di boardroom.
- * Sesi demo (session_id 'demo-*') TIDAK PERNAH ditamatkan: tiada session_end dan sweep skip mereka.
+ * Modul reception (App\Office\Demo\ReceptionModule, matikan dengan --no-reception): Reni duduk di kaunter reception,
+ * penghantar Grab / ShopeeFood / J&T / DHL tekan loceng pintu, masuk ke kaunter sahaja, serah barang, lalu keluar
+ * (sesi mereka ditamatkan dan dipadam ~25s kemudian). Lepas tiap penghantaran Reni pusing hantar arahan ke tempat lain.
+ * Sesi staff demo (session_id 'demo-*') TIDAK PERNAH ditamatkan: tiada session_end dan sweep skip mereka.
+ * Pengecualian: penghantar ('demo-visit-*') tamat sendiri selepas serahan.
  */
 class OfficeDemo extends Command
 {
     protected $signature = 'office:demo
         {--hours=24 : Berapa jam demo berjalan}
         {--speed=1 : Pecutan masa (2 = dua kali ganda laju)}
-        {--once : Satu kitaran sahaja}';
+        {--once : Satu kitaran sahaja}
+        {--no-reception : Matikan modul reception (penyambut tetamu + penghantar)}';
 
-    protected $description = 'Demo 24 jam: 13 staff (briefing, kerja, tandas, pantri, chill room). Sesi tak ditamatkan.';
+    protected $description = 'Demo 24 jam: 13 staff + penyambut tetamu (briefing, kerja, tandas, pantri, chill room, penghantaran). Sesi staff tak ditamatkan.';
 
     /** Peringkat rotator: [nama, min saat, max saat, department (null = kerja di meja)]. */
     private const STAGE_WORK = 0;
@@ -70,6 +76,8 @@ class OfficeDemo extends Command
     /** @var array<string, array{input:int,output:int,cache_read:int,cache_create:int}> */
     private array $usage = [];
 
+    private ?ReceptionModule $reception = null;
+
     public function handle(): int
     {
         $this->speed = max(0.1, (float) $this->option('speed'));
@@ -78,10 +86,19 @@ class OfficeDemo extends Command
         $this->registerTeam();
         $this->initRotators();
 
+        $this->reception = null; // instance command boleh dipakai semula (test), jangan bawa modul lama
+        if (! $this->option('no-reception')) {
+            $this->reception = new ReceptionModule(
+                fn (array $m, string $event, ?string $tool, ?string $target, ?string $department) => $this->emit($m, $event, $tool, $target, $department),
+                speed: $this->speed,
+            );
+            $this->reception->start();
+        }
+
         $endAt = microtime(true) + ((float) $this->option('hours') * 3600) / $this->speed;
         $cycle = 0;
 
-        $this->info('Demo mula: '.(count($this->team) + count($this->rotators)).' staff, '.$this->option('hours').' jam. Ctrl+C untuk henti.');
+        $this->info('Demo mula: '.(count($this->team) + count($this->rotators) + ($this->reception ? 1 : 0)).' staff, '.$this->option('hours').' jam. Ctrl+C untuk henti.');
 
         do {
             $cycle++;
@@ -95,6 +112,7 @@ class OfficeDemo extends Command
             gc_collect_cycles();
         } while (! $this->option('once') && microtime(true) < $endAt);
 
+        $this->reception?->finish();
         $this->info('Demo selesai. Sesi staff dibiar hidup (tiada session_end).');
 
         return self::SUCCESS;
@@ -372,6 +390,7 @@ class OfficeDemo extends Command
                 $this->teamStep($m, $state[$i], $now);
             }
             $this->tickRotators();
+            $this->reception?->tick();
             usleep((int) (1000000 / $this->speed));
         }
 
@@ -564,7 +583,7 @@ class OfficeDemo extends Command
             name: $m['auto'],
             label: $m['label'],
             pc: 'DEMO-PC',
-            project: 'eadata-web',
+            project: $m['project'] ?? 'eadata-web',
             event: $event,
             tool: $tool,
             target: $target,
@@ -581,6 +600,7 @@ class OfficeDemo extends Command
         while (microtime(true) < $until) {
             usleep((int) min(1000000, max(0, ($until - microtime(true)) * 1000000)));
             $this->tickRotators();
+            $this->reception?->tick();
         }
     }
 }

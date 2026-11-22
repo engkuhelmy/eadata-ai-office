@@ -16,7 +16,7 @@ class OfficeDemoTest extends TestCase
     private function runDemo(): void
     {
         // speed besar: satu kitaran siap dalam beberapa saat. Queue = sync dalam test.
-        $this->artisan('office:demo', ['--once' => true, '--speed' => 400, '--hours' => 1])->assertSuccessful();
+        $this->artisan('office:demo', ['--once' => true, '--speed' => 400, '--hours' => 1, '--no-reception' => true])->assertSuccessful();
     }
 
     public function test_demo_creates_thirteen_staff_from_four_vendors_with_friendly_names(): void

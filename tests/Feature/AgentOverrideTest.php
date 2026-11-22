@@ -92,13 +92,13 @@ class AgentOverrideTest extends TestCase
 
         $this->getJson('/office/state')->assertJsonPath('agents.0.avatar', 'default');
 
-        foreach (['woman', 'hiphop', 'genz'] as $avatar) {
+        foreach (['woman', 'hiphop', 'genz', 'recep', 'grab', 'shopee', 'jnt', 'dhl'] as $avatar) {
             $this->patchJson("/office/agents/{$agent->id}", ['avatar' => $avatar])
                 ->assertOk()
                 ->assertJsonPath('agent.avatar', $avatar);
         }
 
-        $this->getJson('/office/state')->assertJsonPath('agents.0.avatar', 'genz');
+        $this->getJson('/office/state')->assertJsonPath('agents.0.avatar', 'dhl');
     }
 
     public function test_empty_avatar_returns_to_default_and_missing_avatar_is_kept(): void
@@ -146,7 +146,7 @@ class AgentOverrideTest extends TestCase
 
         $this->actingAs($this->user('owner'));
 
-        foreach (['boardroom', 'pantry', 'toilet', 'playroom'] as $department) {
+        foreach (['boardroom', 'pantry', 'toilet', 'playroom', 'reception', 'frontdesk'] as $department) {
             $this->assertContains($department, DepartmentRouter::DEPARTMENTS);
 
             $this->patchJson("/office/agents/{$agent->id}", ['department' => $department])

@@ -6,7 +6,10 @@ Output: public/assets/office/*.png
 
 Staff dipecah kepada 4 lapisan supaya boleh diwarnakan (tint) dalam Phaser:
   staff_fixed (outline, seluar, kasut, mata), staff_skin, staff_hair, staff_shirt (warna vendor).
-Setiap sheet: 8 frame 32x48 dalam satu baris: 0-1 idle, 2-5 walk, 6-7 typing (duduk).
+Setiap sheet: 16 frame 32x48 dalam satu baris: 0-1 idle, 2-5 walk, 6-7 duduk depan, 8-9 duduk belakang,
+10-11 main/hulur, 12-13 dart, 14-15 minum.
+Gaya vendor/pelawat (recep, grab, shopee, jnt, dhl) -> staff_{style}_{fixed|skin|hair|shirt}.png.
+Prop tambahan: wall_door_b.png (pintu masuk dinding B), counter_parcels.png (barang hantaran atas kaunter).
 Furniture: sprite tile 56 lebar, anchor bawah-tengah = bucu bawah tile (tengah tile + 14px).
 """
 import argparse
@@ -25,8 +28,13 @@ OL = (58, 36, 20, 255)
 FW, FH = 32, 48
 
 # Gaya staff: default (asal), woman, hiphop, genz. Nama fail: default = staff_*.png (legacy).
-STYLES = ('default', 'woman', 'hiphop', 'genz')
-SHEET_PREFIX = {'default': 'staff', 'woman': 'staff_woman', 'hiphop': 'staff_hiphop', 'genz': 'staff_genz'}
+STYLES = ('default', 'woman', 'hiphop', 'genz', 'recep', 'grab', 'shopee', 'jnt', 'dhl')
+SHEET_PREFIX = {'default': 'staff', 'woman': 'staff_woman', 'hiphop': 'staff_hiphop', 'genz': 'staff_genz',
+                'recep': 'staff_recep', 'grab': 'staff_grab', 'shopee': 'staff_shopee', 'jnt': 'staff_jnt',
+                'dhl': 'staff_dhl'}
+# Tint shirt masa runtime untuk gaya vendor/pelawat (juga dipakai oleh preview)
+VENDOR_TINT = {'recep': (0x42, 0x85, 0xf4), 'grab': (0x00, 0xb1, 0x4f), 'shopee': (0xee, 0x4d, 0x2d),
+               'jnt': (0xd5, 0x20, 0x2a), 'dhl': (0xff, 0xcc, 0x00)}
 
 FIXED = {
     'outline': {1: OL},
@@ -44,6 +52,15 @@ FIXED = {
     'gold': {1: (250, 198, 40, 255), 2: (255, 233, 130, 255)},
     'phones': {0: (150, 156, 170, 255), 1: (212, 216, 226, 255), 2: (255, 255, 255, 255)},
     'cup': {0: (186, 190, 198, 255), 1: (226, 228, 234, 255), 2: (255, 255, 255, 255)},
+    # --- role vendor/pelawat (recep, grab, shopee, jnt, dhl) ---
+    'white': {0: (206, 212, 222, 255), 1: (238, 241, 246, 255), 2: (255, 255, 255, 255)},   # trim/blaus/logo
+    'gblue': {0: (40, 92, 196, 255), 1: (66, 133, 244, 255), 2: (140, 184, 252, 255)},      # lanyard
+    'grabbag': {0: (0, 112, 52, 255), 1: (0, 168, 76, 255), 2: (78, 214, 134, 255)},
+    'shopeebag': {0: (176, 52, 26, 255), 1: (238, 77, 45, 255), 2: (255, 140, 104, 255)},
+    'cardboard': {0: (148, 102, 58, 255), 1: (196, 146, 88, 255), 2: (226, 182, 124, 255)},
+    'jnt_red': {0: (150, 18, 28, 255), 1: (213, 32, 42, 255), 2: (244, 92, 96, 255)},
+    'dhl_yellow': {0: (214, 160, 0, 255), 1: (255, 204, 0, 255), 2: (255, 232, 118, 255)},
+    'dhl_red': {0: (150, 12, 22, 255), 1: (212, 5, 17, 255), 2: (240, 72, 72, 255)},
 }
 TINT_LEVELS = {
     'skin': {0: 0.80, 1: 1.0, 2: 1.0},
@@ -706,6 +723,499 @@ def figure_back(typing=0, style='default'):
     return add_outline(b)
 
 
+# ---- gaya staff vendor/pelawat: recep, grab, shopee, jnt, dhl -------------------------------
+# Lapisan shirt ditint masa runtime (warna jenama); cap/uniform ikut tint. Elemen jenama tetap
+# (beg, bungkusan, trim, logo) berada dalam lapisan fixed melalui role baru.
+
+VENDOR_STYLES = ('recep', 'grab', 'shopee', 'jnt', 'dhl')
+LEGS_ROLE = {'grab': 'pants2', 'shopee': 'pants2', 'jnt': 'pants', 'dhl': 'pants2'}
+
+ARM_RIDER = dict(lx=8, rx=21, w=3, sleeve=4, hand=7, hand_in=0, tl=9, tr=20, k_skin=4, rs=22, skin_from=0.3,
+                 shl=(2, 1, 1), shr=(1, 1, 0))
+ARM_RECEP = dict(lx=8, rx=21, w=3, sleeve=9, hand=2, hand_in=0, tl=9, tr=20, k_skin=99, rs=22, skin_from=0.85,
+                 shl=(2, 1, 1), shr=(1, 1, 0))
+for _s in VENDOR_STYLES:
+    ARM[_s] = ARM_RECEP if _s == 'recep' else ARM_RIDER
+    BACK_ARM[_s] = dict(lx=8, rx=21, w=3, skin_from=99 if _s == 'recep' else 4, shl=(2, 1, 1), shr=(1, 1, 0))
+
+
+def put_rows(b, x0, y0, rows, mapping):
+    """Lukis ascii-art: mapping {aksara: (role, shade)}; '.' = kosong."""
+    for gy, row in enumerate(rows):
+        for gx, ch in enumerate(row):
+            if ch in mapping:
+                role, sh = mapping[ch]
+                b.put(x0 + gx, y0 + gy, role, sh)
+
+
+GLYPH_G = ["XXX.", "X...", "X.XX", "X..X", "XXX."]   # 'G' stylised (4x5)
+GLYPH_G5 = [".XXX.", "X....", "X.XXX", "X...X", ".XXX."]
+GLYPH_S = [".XXX", "X...", ".XX.", "...X", "XXX."]    # 'S' stylised (4x5)
+
+
+# ---- kepala ---------------------------------------------------------------------
+
+def head_recep(b, y0):
+    head_shape(b, y0, jaw_dark=False)
+    # rambut disisir ke belakang + sanggul di atas
+    for x in range(15, 18):
+        b.put(x, y0 - 3, 'hair', 2)
+    for row in (-2, -1):
+        for x in range(14, 19):
+            b.put(x, y0 + row, 'hair', 2 if (row == -2 and x <= 16) else 0 if x == 18 else 1)
+    for x in range(12, 21):
+        b.put(x, y0, 'hair', 2)
+    for row in (1, 2):
+        for x in range(11, 22):
+            b.put(x, y0 + row, 'hair', 2 if (row == 1 and 12 <= x <= 14) else 0 if x in (11, 21) else 1)
+    for x in range(11, 15):
+        b.put(x, y0 + 3, 'hair', 2 if x <= 12 else 1)
+    for x in (20, 21):
+        b.put(x, y0 + 3, 'hair', 1)
+    for row in (4, 5):
+        b.put(11, y0 + row, 'hair', 0)
+        b.put(21, y0 + row, 'hair', 0)
+    # headset: band melintas atas kepala, cawan di telinga, mic boom ke mulut
+    for x in range(12, 21):
+        b.put(x, y0, 'cap', 2 if x in (15, 16) else 1)
+    b.put(11, y0 + 1, 'cap', 1)
+    b.put(21, y0 + 1, 'cap', 1)
+    for x0 in (9, 22):
+        b.put(x0 + (1 if x0 == 9 else 0), y0 + 2, 'cap', 1)
+        b.put(x0 + (1 if x0 == 9 else 0), y0 + 3, 'cap', 1)
+        for row in range(4, 8):
+            b.put(x0, y0 + row, 'cap', 1)
+            b.put(x0 + 1, y0 + row, 'cap', 2 if row == 5 else 1)
+    for (x, y) in ((10, 8), (11, 9), (12, 9), (13, 9)):
+        b.put(x, y0 + y, 'cap', 1)
+    b.put(14, y0 + 8, 'cap', 2)
+    b.put(14, y0 + 9, 'cap', 1)
+    # muka
+    for x in (13, 14, 18, 19):
+        b.put(x, y0 + 5, 'eyes')
+    b.put(12, y0 + 4, 'eyes')
+    b.put(20, y0 + 4, 'eyes')
+    for x in (15, 16, 17):
+        b.put(x, y0 + 8, 'lips')
+
+
+def head_rider(b, y0, style):
+    head_shape(b, y0, jaw_dark=(style != 'shopee'))
+    if style == 'shopee':  # rambut panjang jatuh di sisi muka, bawah kap
+        for row in range(4, 11):
+            for x, sh in ((10, 0), (11, 1), (21, 1), (22, 0)):
+                if row == 10 and x in (11, 21):
+                    continue
+                b.put(x, y0 + row, 'hair', sh)
+        for x in (10, 22):
+            b.put(x, y0 + 11, 'hair', 0)
+    # kap (lapisan shirt, ikut tint jenama)
+    for x in range(12, 21):
+        b.put(x, y0, 'shirt', 2)
+    for row in (1, 2):
+        for x in range(11, 22):
+            b.put(x, y0 + row, 'shirt', 2 if (row == 1 and x in (13, 14)) else 0 if x in (11, 21) else 1)
+    # brim (lebih lebar dari kepala)
+    for x in range(10, 23):
+        b.put(x, y0 + 3, 'shirt', 0 if x in (10, 22) else 2 if x < 13 else 1)
+    for x in range(12, 21):
+        b.put(x, y0 + 4, 'skin', 0)  # bayang di bawah brim
+    if style != 'shopee':
+        for row in (4, 5):
+            b.put(11, y0 + row, 'hair', 0)
+            b.put(21, y0 + row, 'hair', 0)
+    # tanda jenama pada kap
+    if style == 'grab':
+        for x, y in ((15, 1), (16, 1), (17, 1), (15, 2), (17, 2), (16, 2)):
+            b.put(x, y0 + y, 'white', 2)
+        b.put(16, y0 + 2, 'shirt', 1)
+    elif style == 'shopee':
+        for x, y in ((15, 1), (16, 1), (16, 2), (17, 2)):
+            b.put(x, y0 + y, 'white', 2)
+    elif style == 'jnt':
+        for x in range(11, 22):
+            b.put(x, y0 + 2, 'white', 2 if 12 <= x <= 20 else 0)
+    elif style == 'dhl':
+        for x in range(11, 22):
+            b.put(x, y0 + 2, 'dhl_red', 1)
+    # muka
+    if style == 'shopee':
+        for x in (13, 14, 18, 19):
+            b.put(x, y0 + 5, 'eyes')
+        for x in (15, 16, 17):
+            b.put(x, y0 + 8, 'lips')
+    else:
+        b.put(14, y0 + 5, 'eyes')
+        b.put(18, y0 + 5, 'eyes')
+        for x in (15, 16, 17):
+            b.put(x, y0 + 8, 'mouth')
+        if style == 'dhl':  # janggut tipis
+            for x in (13, 14, 18, 19):
+                b.put(x, y0 + 9, 'hair', 0)
+            for x in (15, 16, 17):
+                b.put(x, y0 + 9, 'hair', 0)
+            for x in (15, 16, 17):
+                b.put(x, y0 + 8, 'mouth')
+
+
+# ---- badan ----------------------------------------------------------------------
+
+def torso_recep(b, yt, seated):
+    for x in (15, 16, 17):
+        b.put(x, yt - 1, 'skin', 0)
+    # blazer (shirt) bahu lebar, pinggang kecil
+    for row in range(11):
+        xs = range(11, 21) if row <= 4 else range(12, 20)
+        for x in xs:
+            shade = 2 if x <= 12 else 0 if x >= 19 else 1
+            if row >= 9:
+                shade = 0 if x >= 14 else 1
+            b.put(x, yt + row, 'shirt', shade)
+    # kolar blaus putih + V
+    for x in (15, 16, 17):
+        b.put(x, yt, 'skin', 1)
+    b.put(14, yt, 'white', 2)
+    b.put(18, yt, 'white', 1)
+    for x in (14, 15, 17, 18):
+        b.put(x, yt + 1, 'white', 2 if x < 16 else 1)
+    b.put(16, yt + 1, 'skin', 1)
+    for x in (15, 16, 17):
+        b.put(x, yt + 2, 'white', 2 if x == 15 else 1)
+    b.put(16, yt + 3, 'white', 1)
+    # lapel blazer gelap
+    for (x, y) in ((13, 1), (13, 2), (14, 3), (14, 4), (15, 4), (19, 1), (18, 2), (18, 3), (17, 4)):
+        b.put(x, yt + y, 'shirt', 0)
+    # lanyard biru + tag nama putih
+    for (x, y) in ((14, 2), (15, 3), (15, 4), (16, 5)):
+        b.put(x, yt + y, 'gblue', 1)
+    for (x, y) in ((18, 3), (17, 4), (17, 5)):
+        b.put(x, yt + y, 'gblue', 1)
+    for y in (6, 7, 8):
+        for x in (15, 16, 17):
+            b.put(x, yt + y, 'white', 2 if y < 8 else 0)
+    b.put(15, yt + 6, 'gblue', 1)
+    b.put(16, yt + 7, 'gblue', 2)
+    # skirt pensil gelap (role pants2) hingga atas lutut
+    last = 13 if seated else 19
+    for row in range(11, last + 1):
+        x0, x1 = (12, 19) if row <= 12 else (11, 20)
+        for x in range(x0, x1 + 1):
+            shade = 2 if x <= x0 + 1 else 0 if x >= x1 - 1 else 1
+            if row == 11 or row == last:
+                shade = 0
+            b.put(x, yt + row, 'pants2', shade)
+
+
+def torso_rider(b, yt, seated, style):
+    for x in (15, 16, 17):
+        b.put(x, yt - 1, 'skin', 0)
+    for row in range(14):
+        for x in range(11, 21):
+            shade = 2 if x <= 12 else 0 if x >= 19 else 1
+            if row >= 12:
+                shade = 0
+            b.put(x, yt + row, 'shirt', shade)
+    for x in (15, 16, 17):
+        b.put(x, yt, 'skin', 1)
+    b.put(16, yt + 1, 'skin', 1)
+    b.put(14, yt, 'shirt', 2)
+    b.put(18, yt, 'shirt', 2)
+    b.put(14, yt + 1, 'shirt', 2)
+    b.put(18, yt + 1, 'shirt', 2)
+    if style == 'grab':
+        put_rows(b, 14, yt + 4, GLYPH_G5, {'X': ('white', 2)})
+    elif style == 'shopee':
+        put_rows(b, 14, yt + 4, GLYPH_S, {'X': ('white', 2)})
+        for x in range(11, 21):
+            b.put(x, yt + 12, 'white', 1)
+    elif style == 'jnt':
+        for x in range(11, 21):
+            b.put(x, yt + 6, 'white', 2 if x < 19 else 1)
+            b.put(x, yt + 7, 'white', 1 if x < 19 else 0)
+        for x in (14, 18):
+            b.put(x, yt, 'white', 2)
+    elif style == 'dhl':
+        for x in range(11, 21):
+            b.put(x, yt + 5, 'dhl_red', 1)
+            b.put(x, yt + 6, 'dhl_red', 0 if x >= 19 else 1)
+        for x in (14, 18):
+            b.put(x, yt, 'dhl_red', 1)
+
+
+def legs_rider(role):
+    def legs(b, lx, rx, llift, rlift):
+        for x0, off, lift, shades in ((11, lx, llift, (2, 1, 1, 1, 0)), (16, rx, rlift, (1, 1, 1, 1, 0))):
+            bottom = 43 - lift
+            for y in range(32, bottom + 1):
+                for i in range(5):
+                    b.put(x0 + off + i, y, role, shades[i])
+            for y in range(bottom + 1, bottom + 4):
+                for i in range(-1 if x0 == 11 else 0, 6 if x0 == 16 else 5):
+                    b.put(x0 + off + i, y, 'shoes', 0 if y == bottom + 3 else 1)
+    return legs
+
+
+def legs_recep(b, lx, rx, llift, rlift):
+    legs_woman(b, lx, rx, llift, rlift)
+
+
+for _s in VENDOR_STYLES:
+    HEAD[_s] = head_recep if _s == 'recep' else (lambda b, y0, s=_s: head_rider(b, y0, s))
+    TORSO[_s] = torso_recep if _s == 'recep' else (lambda b, yt, seated, s=_s: torso_rider(b, yt, seated, s))
+    LEGS[_s] = legs_recep if _s == 'recep' else legs_rider(LEGS_ROLE[_s])
+
+
+# ---- barang bawaan ----------------------------------------------------------------
+
+def bag_item(b, x0, y0, w, h, role, glyph, handle=True):
+    """Beg penghantar berinsulasi: lid + badan, tanda putih di tengah, pemegang di atas."""
+    if handle:
+        for x in range(x0 + 2, x0 + w - 2):
+            b.put(x, y0 - 2, 'cap', 1)
+        b.put(x0 + 2, y0 - 1, 'cap', 1)
+        b.put(x0 + w - 3, y0 - 1, 'cap', 1)
+    for y in range(h):
+        for x in range(w):
+            sh = 1
+            if y == 0:
+                sh = 2
+            elif y == 2 or y == h - 1 or x == w - 1:
+                sh = 0
+            elif x == 0:
+                sh = 2
+            b.put(x0 + x, y0 + y, role, sh)
+    gx = x0 + (w - len(glyph[0])) // 2
+    put_rows(b, gx, y0 + 3, glyph, {'X': ('white', 2)})
+    b.put(x0 + w // 2, y0 + 1, 'white', 1)  # kepala zip
+
+
+def parcel_item(b, x0, y0, w, h, kind, handle=True):
+    """Kotak bungkusan: kind = 'jnt' (kadbod + jalur merah) / 'dhl' (kuning + jalur merah)."""
+    body, band = ('cardboard', 'jnt_red') if kind == 'jnt' else ('dhl_yellow', 'dhl_red')
+    if handle:
+        for x in range(x0 + 2, x0 + w - 2):
+            b.put(x, y0 - 2, 'cap', 1)
+        b.put(x0 + 2, y0 - 1, 'cap', 1)
+        b.put(x0 + w - 3, y0 - 1, 'cap', 1)
+    for y in range(h):
+        for x in range(w):
+            sh = 1
+            if y == 0:
+                sh = 2
+            elif y == h - 1 or x == w - 1:
+                sh = 0
+            elif x == 0:
+                sh = 2
+            b.put(x0 + x, y0 + y, body, sh)
+    for x in range(w):
+        b.put(x0 + x, y0 + 1, body, 0)  # garis lipatan penutup
+    if kind == 'jnt':
+        cx = x0 + w // 2 - 1
+        for y in range(h):
+            for dx in (0, 1):
+                b.put(cx + dx, y0 + y, band, 2 if dx == 0 else 1)
+        for y in (3, 4):
+            for x in range(x0 + w - 4, x0 + w - 1):
+                b.put(x, y0 + y, 'white', 2)
+        b.put(x0 + w - 3, y0 + 4, band, 1)
+    else:
+        my = y0 + h // 2 - 1
+        for y in (0, 1):
+            for x in range(w):
+                b.put(x0 + x, my + y, band, 1 if y == 0 else 0)
+        for y in (2, 3):
+            for x in range(x0 + 1, x0 + 4):
+                b.put(x, y0 + y, 'white', 2)
+
+
+def item_ring(b, x0, y0, w, h):
+    """Garis luar gelap di sekeliling barang (hanya pada piksel kosong) supaya nampak di atas baju sewarna."""
+    for x in range(x0 - 1, x0 + w + 1):
+        for y in (y0 - 1, y0 + h):
+            if (x, y) not in b.px:
+                b.put(x, y, 'outline', 1)
+    for y in range(y0, y0 + h):
+        for x in (x0 - 1, x0 + w):
+            if (x, y) not in b.px:
+                b.put(x, y, 'outline', 1)
+
+
+def item_for(b, style, x0, y0, w, h, handle=True):
+    if style in ('grab', 'shopee', 'jnt', 'dhl'):
+        for y in range(y0, y0 + h):
+            for x in range(x0, x0 + w):
+                b.px.pop((x, y), None)
+        item_ring(b, x0, y0, w, h)
+    _item_for(b, style, x0, y0, w, h, handle)
+
+
+def _item_for(b, style, x0, y0, w, h, handle=True):
+    if style == 'grab':
+        bag_item(b, x0, y0, w, h, 'grabbag', GLYPH_G, handle)
+    elif style == 'shopee':
+        bag_item(b, x0, y0, w, h, 'shopeebag', GLYPH_S, handle)
+    elif style == 'jnt':
+        parcel_item(b, x0, y0, w, h, 'jnt', handle)
+    elif style == 'dhl':
+        parcel_item(b, x0, y0, w, h, 'dhl', handle)
+
+
+def trim_sleeves(b, yt, style, A, al=0, ar=0):
+    """Cuff trim pada hujung lengan baju (jnt putih, dhl merah)."""
+    role = {'jnt': 'white', 'dhl': 'dhl_red'}.get(style)
+    if not role:
+        return
+    for x0, off in ((A['lx'], al), (A['rx'], ar)):
+        for i in range(A['w']):
+            b.put(x0 + i, yt + A['sleeve'] + off, role, 2 if i == 0 else 1)
+
+
+def hold_arms(b, yt, style, phase):
+    """Dua tangan ke hadapan memegang barang di depan dada (frame 10-11)."""
+    A = ARM[style]
+    for x0, sh in ((A['lx'], A['shl']), (A['rx'], A['shr'])):
+        for row in range(4):
+            for i in range(A['w']):
+                b.put(x0 + i, yt + 1 + row, 'shirt', sh[i])
+    up = phase
+    stroke(b, (9, yt + 5), (10, yt + 9 - up), 3, 'skin', (1,))
+    stroke(b, (22, yt + 5), (21, yt + 9 - up), 3, 'skin', (1,))
+    return up
+
+
+def figure_vendor(style, dy=0, seated=False, lx=0, rx=0, llift=0, rlift=0, al=0, ar=0, typing=None, pose=None,
+                  hold=None, carry=False):
+    b = Buf()
+    y0 = 6 + dy
+    yt = y0 + 12
+    A = ARM[style]
+    if not seated:
+        LEGS[style](b, lx, rx, llift, rlift)
+    HEAD[style](b, y0)
+    TORSO[style](b, yt, seated)
+    if hold is not None:
+        if style == 'recep':
+            hang_arm(b, yt, A['lx'], 0, A['shl'], A)
+            for row in range(1, 4):
+                for i in range(A['w']):
+                    b.put(A['rx'] + i, yt + row, 'shirt', A['shr'][i])
+            sx, sy = A['rs'], yt + 2
+            bent_arm(b, (sx, sy), (sx + 3, sy + 3 - hold), (sx + 6, yt + 6 - 2 * hold), A)
+            # kad/dokumen putih dihulur
+            for gy in range(5):
+                for gx in range(4):
+                    b.put(sx + 5 + gx, yt + 1 - 2 * hold + gy, 'white', 2 if gy == 0 or gx == 0 else 1 if gx < 3 else 0)
+            b.put(sx + 6, yt + 3 - 2 * hold, 'gblue', 1)
+            b.put(sx + 7, yt + 3 - 2 * hold, 'gblue', 1)
+        else:
+            up = hold_arms(b, yt, style, hold)
+            item_for(b, style, 10, yt + 9 - up, 12, 9, handle=False)
+            # tangan menggenggam sisi barang
+            for y in (yt + 11 - up, yt + 12 - up, yt + 13 - up):
+                for x in (9, 22):
+                    b.put(x, y, 'skin', 1)
+                b.put(10 if y != yt + 13 - up else 9, y, 'skin', 2 if False else 1)
+                b.put(21 if y != yt + 13 - up else 22, y, 'skin', 1)
+            trim_sleeves(b, yt, style, dict(A, sleeve=4))
+    elif pose:
+        hang_arm(b, yt, A['lx'], 0, A['shl'], A)
+        pose_arm(b, yt, pose, A)
+        trim_sleeves(b, yt, style, A)
+    elif typing is None:
+        hang_arm(b, yt, A['lx'], al, A['shl'], A)
+        hang_arm(b, yt, A['rx'], 0 if carry else ar, A['shr'], A)
+        if style != 'recep':
+            trim_sleeves(b, yt, style, A, al, 0 if carry else ar)
+        if carry and style != 'recep':
+            item_for(b, style, 22, yt + 14, 9, 10)
+    else:
+        typing_arms(b, yt, typing, A)
+    return add_outline(b)
+
+
+def back_head_vendor(b, y0, style):
+    if style == 'recep':
+        for x in range(15, 18):
+            b.put(x, y0 - 3, 'hair', 2)
+        for row in (-2, -1):
+            for x in range(14, 19):
+                b.put(x, y0 + row, 'hair', 2 if (row == -2 and x <= 16) else 0 if x == 18 else 1)
+        for row in range(10):
+            x0, x1 = (12, 20) if row in (0, 9) else (11, 21)
+            for x in range(x0, x1 + 1):
+                b.put(x, y0 + row, 'hair', 2 if row <= 2 else 1 if row <= 6 else 0)
+        for x in range(12, 21):
+            b.put(x, y0, 'cap', 2 if x in (15, 16) else 1)
+        for x0 in (9, 22):
+            for row in range(3, 8):
+                b.put(x0, y0 + row, 'cap', 1)
+                b.put(x0 + 1, y0 + row, 'cap', 1 if row != 5 else 2)
+        for x in (14, 15, 16, 17, 18):
+            b.put(x, y0 + 10, 'skin', 0)
+        return
+    for row in range(11):
+        x0, x1 = (12, 20) if row in (0, 9) else (13, 19) if row == 10 else (11, 21)
+        for x in range(x0, x1 + 1):
+            if row <= 4:
+                b.put(x, y0 + row, 'shirt', 2 if (row == 1 and x in (13, 14)) else 0 if x in (11, 21) else 1)
+            else:
+                b.put(x, y0 + row, 'hair', 1 if row <= 7 else 0)
+    for x in range(14, 19):
+        b.put(x, y0 + 5, 'shirt', 0)  # strap kap
+    if style == 'shopee':  # rambut panjang jatuh ke belakang
+        for row in range(8, 17):
+            for x in range(12, 21):
+                b.put(x, y0 + row, 'hair', 2 if x <= 13 else 0 if x >= 19 else 1)
+    else:
+        for x in (14, 15, 16, 17, 18):
+            b.put(x, y0 + 10, 'skin', 0)
+    if style == 'jnt':
+        for x in range(11, 22):
+            b.put(x, y0 + 4, 'white', 1)
+    elif style == 'dhl':
+        for x in range(11, 22):
+            b.put(x, y0 + 4, 'dhl_red', 1)
+
+
+def figure_back_vendor(typing=0, style='grab'):
+    b = Buf()
+    y0 = 10
+    back_head_vendor(b, y0, style)
+    yt = y0 + 12
+    for x in (15, 16, 17):
+        b.put(x, yt - 1, 'skin', 0)
+    if style == 'recep':
+        for row in range(11):
+            xs = range(11, 21) if row <= 4 else range(12, 20)
+            for x in xs:
+                shade = 2 if x <= 12 else 0 if x >= 19 else 1
+                if row >= 9:
+                    shade = 0
+                b.put(x, yt + row, 'shirt', shade)
+        for row in range(11, 14):
+            x0, x1 = (12, 19)
+            for x in range(x0, x1 + 1):
+                b.put(x, yt + row, 'pants2', 0 if row == 11 else 2 if x <= x0 + 1 else 0 if x >= x1 - 1 else 1)
+    else:
+        for row in range(14):
+            for x in range(11, 21):
+                b.put(x, yt + row, 'shirt', 2 if x <= 12 else 0 if x >= 19 else 1)
+        for x in range(13, 20):
+            b.put(x, yt, 'shirt', 0)
+            b.put(x, yt + 1, 'shirt', 0)
+        for x in range(14, 19):
+            b.put(x, yt + 2, 'shirt', 0)
+    A = BACK_ARM[style]
+    for side, x0 in ((0, A['lx']), (1, A['rx'])):
+        lift = (typing + side) % 2
+        shades = A['shl'] if side == 0 else A['shr']
+        for row in range(7):
+            skin = row >= A['skin_from']
+            for i in range(A['w']):
+                b.put(x0 + i, yt + 1 + row - lift, 'skin' if skin else 'shirt', 1 if skin else shades[i])
+    return add_outline(b)
+
+
 FRAMES = [
     dict(dy=0),
     dict(dy=1),
@@ -729,11 +1239,28 @@ FRAMES = [
 ]
 
 
+def vendor_frames():
+    """Frame untuk gaya vendor: sama seperti FRAMES, tetapi 0-5 membawa barang & 10-11 = hulur/pegang ke depan."""
+    out = []
+    for i, f in enumerate(FRAMES):
+        f = dict(f)
+        if i < 6:
+            f['carry'] = True
+        elif i in (10, 11):
+            f = dict(hold=i - 10)
+        out.append(f)
+    return out
+
+
 def staff_sheets(style='default'):
     """Pulangkan {fixed, skin, hair, shirt: Image 512x48} untuk satu style."""
     sheets = {name: Image.new('RGBA', (FW * len(FRAMES), FH), (0, 0, 0, 0)) for name in ('fixed', 'skin', 'hair', 'shirt')}
-    for index, pose in enumerate(FRAMES):
-        buf = figure_back(pose['typing'], style) if pose.get('back') else figure(style=style, **pose)
+    vendor = style in VENDOR_STYLES
+    for index, pose in enumerate(vendor_frames() if vendor else FRAMES):
+        if pose.get('back'):
+            buf = figure_back_vendor(pose['typing'], style) if vendor else figure_back(pose['typing'], style)
+        else:
+            buf = figure_vendor(style, **pose) if vendor else figure(style=style, **pose)
         for (x, y), (role, shade) in buf.px.items():
             ox = index * FW + x
             if role in FIXED:
@@ -1092,6 +1619,99 @@ def boardtable():
     d.polygon([(cx + 4, ty + 1), (cx + 13, ty - 3), (cx + 18, ty - 1), (cx + 9, ty + 3)], fill=(178, 182, 190, 255), outline=OL)
     d.polygon([(cx + 5, ty - 1), (cx + 13, ty - 5), (cx + 13, ty - 9), (cx + 5, ty - 5)], fill=(40, 44, 56, 255), outline=OL)
     d.line([(cx + 6, ty - 4), (cx + 12, ty - 7)], fill=(100, 160, 240, 255))
+    return img
+
+def wall_door():
+    """Pintu masuk pejabat (dua daun kaca, bingkai biru Google) ~2 tile lebar. Lukis rata 56x100, kemudian di-shear."""
+    img, d = new(56, 100)
+    steel, glass_t, glass_b = (200, 206, 216, 255), (200, 228, 252), (150, 196, 242)
+    d.rectangle([0, 0, 55, 99], fill=G_BLUE, outline=OL)           # bingkai
+    d.line([(1, 1), (54, 1)], fill=shade(G_BLUE, 1.3))
+    d.rectangle([3, 5, 52, 93], fill=(236, 240, 246, 255), outline=OL)  # alur daun pintu
+    for x0 in (4, 29):                                              # dua daun
+        x1 = x0 + 22
+        d.rectangle([x0, 6, x1, 92], fill=(248, 250, 252, 255), outline=(150, 160, 176, 255))
+        for y in range(8, 70):                                      # kaca: biru muda -> lebih gelap
+            t = (y - 8) / 62
+            col = tuple(int(glass_t[i] + (glass_b[i] - glass_t[i]) * t) for i in range(3)) + (255,)
+            d.line([(x0 + 2, y), (x1 - 2, y)], fill=col)
+        d.rectangle([x0 + 1, 7, x1 - 1, 70], outline=shade(G_BLUE, 0.9))
+        for k in range(3):                                          # kilauan serong
+            d.line([(x0 + 4 + k, 30 - k), (x0 + 12 + k, 12 - k)], fill=(255, 255, 255, 255))
+        d.line([(x0 + 14, 42), (x0 + 19, 32)], fill=(236, 246, 255, 255))
+        d.rectangle([x0 + 1, 72, x1 - 1, 91], fill=(228, 232, 240, 255), outline=(150, 160, 176, 255))  # panel bawah
+        d.rectangle([x0 + 3, 76, x1 - 3, 87], outline=(190, 198, 212, 255))
+        d.line([(x0 + 3, 77), (x1 - 3, 77)], fill=(255, 255, 255, 255))
+    d.rectangle([26, 5, 29, 93], fill=G_BLUE, outline=OL)           # tiang tengah
+    d.line([(27, 7), (27, 91)], fill=shade(G_BLUE, 1.25))
+    for hx in (22, 32):                                             # pemegang bar keluli
+        d.rectangle([hx, 40, hx + 1, 62], fill=steel, outline=OL)
+        d.line([(hx, 42), (hx, 60)], fill=(255, 255, 255, 255))
+    # tanda OPEN kecil pada kaca daun kanan
+    d.rectangle([33, 13, 50, 22], fill=(255, 255, 255, 255), outline=OL)
+    d.rectangle([34, 14, 49, 21], fill=G_GREEN)
+    open_glyphs = {'O': ["XXX", "X.X", "X.X", "X.X", "XXX"], 'P': ["XXX", "X.X", "XXX", "X..", "X.."],
+                   'E': ["XXX", "X..", "XX.", "X..", "XXX"], 'N': ["XX.", "X.X", "X.X", "X.X", "X.X"]}
+    for i, ch in enumerate('OPEN'):
+        for gy, row in enumerate(open_glyphs[ch]):
+            for gx, c in enumerate(row):
+                if c == 'X':
+                    d.point((35 + i * 4 + gx, 15 + gy), fill=(255, 255, 255, 255))
+    d.line([(41, 7), (41, 12)], fill=OL)                            # gantung
+    # ambang (threshold)
+    d.rectangle([0, 94, 55, 99], fill=(214, 218, 224, 255), outline=OL)
+    d.line([(2, 96), (53, 96)], fill=(255, 255, 255, 255))
+    return img
+
+
+def counter_parcels():
+    """Longgokan barang hantaran di atas kaunter resepsi (56x56, bahagian bawah 16px = kotak kaunter, dibiarkan kosong)."""
+    OFF = 12
+    img, d = new(56, 56)
+
+    def block(bx, by, hw, h, top, left, right, hi=None):
+        sbox(d, bx, by + OFF, hw, h, top, left, right, hi)
+
+    def band(bx, by, hw, h, col, top_col, wd=2):
+        by += OFF
+        hh = hw // 2
+        mx = bx + hw // 2 - 1
+        for x in range(mx, mx + wd):  # jalur menegak pada muka kanan
+            d.line([(x, by - h - (x - bx) // 2), (x, by - (x - bx) // 2 - 1)], fill=col)
+        m1 = (bx - hw // 2, by - h - (hw + hh) // 2)
+        m2 = (bx + hw // 2, by - h - hh // 2)
+        d.line([m1, m2], fill=top_col, width=2)
+
+    def label(bx, by, hw, h, rows, colors, fx0, fy0):
+        fl, _ = new(len(rows[0]), len(rows))
+        put_flat(fl, rows, colors)
+        face_paste(img, fl, bx, by + OFF, hw, h, 'L', fx0, fy0)
+
+    def put_flat(fl, rows, colors):
+        for gy, row in enumerate(rows):
+            for gx, ch in enumerate(row):
+                if ch in colors:
+                    fl.putpixel((gx, gy), colors[ch])
+
+    WHT, RED = (255, 255, 255, 255), (213, 32, 42, 255)
+    # beg oren (belakang)
+    OR, ORl, ORr = (238, 77, 45, 255), (226, 66, 34, 255), (176, 52, 26, 255)
+    block(30, 17, 7, 12, (255, 150, 112, 255), OR, ORr, (255, 190, 160, 255))
+    d.rectangle([28, 17 + OFF - 12 - 5, 32, 17 + OFF - 12 - 4], fill=(40, 40, 46, 255))  # pemegang
+    label(30, 17, 7, 12, [".XX.", "X...", ".XX.", "...X", "XXX."], {'X': WHT}, 1, 4)
+    # kotak J&T (kadbod + jalur merah + label)
+    block(17, 22, 9, 9, (232, 190, 130, 255), (206, 154, 92, 255), (160, 112, 64, 255), (246, 214, 164, 255))
+    band(17, 22, 9, 9, RED, RED)
+    label(17, 22, 9, 9, ["XXXX", "XXXX", "X..X"], {'X': WHT}, 1, 3)
+    # kotak DHL (kuning + jalur merah)
+    YL = (255, 204, 0, 255)
+    block(42, 21, 8, 8, (255, 232, 118, 255), YL, (214, 160, 0, 255), (255, 244, 170, 255))
+    band(42, 21, 8, 8, (212, 5, 17, 255), (212, 5, 17, 255))
+    label(42, 21, 8, 8, ["XXX", "XXX"], {'X': WHT}, 1, 2)
+    # beg hijau (hadapan)
+    block(29, 27, 7, 11, (110, 220, 150, 255), (0, 168, 76, 255), (0, 112, 52, 255), (170, 244, 198, 255))
+    d.rectangle([27, 27 + OFF - 11 - 5, 31, 27 + OFF - 11 - 4], fill=(40, 40, 46, 255))
+    label(29, 27, 7, 11, ["XXX.", "X...", "X.XX", "X..X", "XXX."], {'X': WHT}, 1, 3)
     return img
 
 
@@ -1515,7 +2135,7 @@ def build(preview=None):
         'wall_board_a': shear(wall_board(), 'A'), 'wall_cork_b': shear(wall_cork(), 'B'),
         'wall_poster_a1': shear(wall_poster('chart'), 'A'), 'wall_poster_a2': shear(wall_poster('sun'), 'A'),
         'wall_poster_b': shear(wall_poster('sun'), 'B'), 'wall_logo_b': shear(wall_logo(), 'B'),
-        'wall_dartboard_b': shear(wall_dartboard(), 'B'),
+        'wall_dartboard_b': shear(wall_dartboard(), 'B'), 'wall_door_b': shear(wall_door(), 'B'),
         'brand_logo': wall_logo(),
         'partition_a': partition(), 'partition_b': partition().transpose(Image.FLIP_LEFT_RIGHT),
         'partition_a_logo': partition_poster(), 'partition_b_logo': partition_poster().transpose(Image.FLIP_LEFT_RIGHT),
@@ -1535,7 +2155,7 @@ def build(preview=None):
         'table': table(), 'reception': reception(), 'bell': bell(),
         'snooker': snooker(), 'fridge': fridge(), 'wc': wc(), 'sink': sink(), 'boardtable': boardtable(),
         'machine_starbucks': machine_starbucks(), 'machine_zus': machine_zus(),
-        'icecream': machine_icecream(), 'chiller_redbull': chiller_redbull(),
+        'icecream': machine_icecream(), 'chiller_redbull': chiller_redbull(), 'counter_parcels': counter_parcels(),
         'floor_a': floor_tile((238, 224, 196, 255), 1), 'floor_b': floor_tile((226, 208, 174, 255), 2),
     }
     for name, img in assets.items():
@@ -1544,7 +2164,7 @@ def build(preview=None):
     print(f'{len(assets) + len(walls) + len(staff)} fail ditulis ke {OUT}')
 
     if preview:
-        make_preview(Path(preview), {**assets, 'wall_dartboard_b': walls['wall_dartboard_b']})
+        make_preview(Path(preview), {**assets, 'wall_dartboard_b': walls['wall_dartboard_b'], 'wall_door_b': walls['wall_door_b']})
 
 
 def make_preview(folder, assets):
@@ -1564,7 +2184,12 @@ def make_preview(folder, assets):
     combos = [((217, 119, 87), (242, 207, 174), (42, 34, 25)), ((16, 163, 127), (141, 85, 36), (109, 76, 42)),
               ((139, 92, 246), (217, 165, 119), (31, 41, 55)), ((234, 67, 53), (245, 208, 176), (161, 98, 7))]
 
+    vendor_skins = [((242, 207, 174), (42, 34, 25)), ((141, 85, 36), (30, 24, 20)), ((217, 165, 119), (74, 48, 28)),
+                    ((245, 208, 176), (24, 20, 18))]
+
     def style_strip(style, rows=combos):
+        if style in VENDOR_STYLES:
+            rows = [(VENDOR_TINT[style], sk, hr) for sk, hr in vendor_skins]
         prefix = SHEET_PREFIX[style]
         sheets = {n: Image.open(OUT / f'{prefix}_{n}.png') for n in ('fixed', 'skin', 'hair', 'shirt')}
         strip = Image.new('RGBA', (FW * len(FRAMES), FH * len(rows)), (200, 160, 110, 255))
