@@ -109,6 +109,7 @@ class InsightsController extends Controller
     {
         $active = Agent::query()
             ->whereNull('ended_at')
+            ->where('status', '!=', Agent::STATUS_OFF)
             ->select('vendor', DB::raw('COUNT(*) as total'))
             ->groupBy('vendor')
             ->pluck('total', 'vendor');
@@ -164,7 +165,7 @@ class InsightsController extends Controller
         return [
             'events' => AgentEvent::query()->where('ts', '>=', $start)->count(),
             'errors' => AgentEvent::query()->where('ts', '>=', $start)->whereIn('event', ['tool_error', 'error'])->count(),
-            'active_agents' => Agent::query()->whereNull('ended_at')->count(),
+            'active_agents' => Agent::query()->whereNull('ended_at')->where('status', '!=', Agent::STATUS_OFF)->count(),
             // Objek (bukan array) supaya kosong jadi {} dalam JSON
             'by_department' => (object) $byDepartment,
             'by_vendor' => (object) $byVendor,

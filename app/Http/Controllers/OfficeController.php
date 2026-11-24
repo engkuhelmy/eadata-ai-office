@@ -53,6 +53,7 @@ class OfficeController extends Controller
         // Cache 2s: ramai pelawat landing page berkongsi satu query
         $agents = Cache::remember('office.embed.agents', 2, fn () => Agent::query()
             ->whereNull('ended_at')
+            ->where('status', '!=', Agent::STATUS_OFF)
             ->orderByDesc('last_event_at')
             ->limit(60)
             ->get()

@@ -44,6 +44,10 @@ python hooks\install-hooks.py --url http://127.0.0.1:8000 --token eod_xxx --tool
 
 Buang `--dry-run` untuk pasang. `--uninstall` untuk buang. Codex perlu `/hooks` trust selepas pasang.
 
+## Staf sebenar (Staff OS)
+
+14 staf AI sebenar didaftar dari fail MD dalam `storage/app/private/staff-os/` (luar git) dengan `php artisan office:staff-import`. Mereka check in melalui `POST /api/staff/checkin` dan terima brief (jawatan, skop, SOP, handoff, peraturan wajib), kemudian bekerja di meja tetap. Bila tak bekerja, mereka ditanda Off dalam senarai Team. Lihat [docs/staff-os.md](docs/staff-os.md).
+
 ## Demo 24 jam
 
 `php artisan office:demo` (atau `scripts\start-demo.ps1`) jalankan demo dalam bangunan 4 aras (L1, L2, L3, Rooftop; kontrak di `docs/multifloor-spec.md`). Jumlah staff demo = **26**: 13 staff IT + 12 staff aras + penyambut tetamu Reni.

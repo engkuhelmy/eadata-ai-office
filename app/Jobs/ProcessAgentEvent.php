@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Events\AgentUpdated;
 use App\Models\Agent;
 use App\Models\AgentEvent;
+use App\Models\StaffMember;
 use App\Office\NormalizedEvent;
 use App\Office\Notifier;
 use App\Office\OfficePresenter;
@@ -32,12 +33,19 @@ class ProcessAgentEvent implements ShouldQueue
         // jadi tukar ke zon app (UTC) dulu supaya sweep dan perbandingan masa betul.
         $ts = Carbon::instance($e->ts)->setTimezone(config('app.timezone'));
 
+        // Staf sebenar tak pernah "tamat": session_end = Off, kekal dalam senarai Team
+        $isStaff = StaffMember::forAgent($e->vendor, $e->agentKey) !== null;
+        $status = $this->statusFor($e->event);
+        if ($isStaff && $status === Agent::STATUS_ENDED) {
+            $status = Agent::STATUS_OFF;
+        }
+
         $attributes = [
             'label' => $e->label,
             'name' => $e->name,
-            'status' => $this->statusFor($e->event),
+            'status' => $status,
             'last_event_at' => $ts,
-            'ended_at' => $e->event === 'session_end' ? $ts : null,
+            'ended_at' => $e->event === 'session_end' && ! $isStaff ? $ts : null,
         ];
 
         if ($e->pc !== null) {

@@ -2,8 +2,10 @@
 
 namespace App\Office\Adapters;
 
+use App\Models\StaffMember;
 use App\Office\DepartmentRouter;
 use App\Office\NormalizedEvent;
+use App\Office\Staff\StaffRouter;
 
 class GenericAdapter extends BaseAdapter
 {
@@ -30,17 +32,25 @@ class GenericAdapter extends BaseAdapter
             $explicit = null;
         }
 
+        $department = $this->router->route($event, $tool, $target, $target, $explicit);
+
+        // Staf sebenar (Staff OS): kerja di meja tetap kalau department tak dihantar
+        $staff = StaffMember::forAgent($this->vendor(), $agent);
+        if ($staff !== null && $explicit === null) {
+            $department = app(StaffRouter::class)->route($staff, $event, $tool, $department);
+        }
+
         return new NormalizedEvent(
             vendor: $this->vendor(),
             agentKey: $agent,
-            name: $this->str($payload, 'name') ?? $agent,
-            label: $this->str($payload, 'label') ?? 'Generic',
+            name: $this->str($payload, 'name') ?? $staff?->name ?? $agent,
+            label: $this->str($payload, 'label') ?? ($staff !== null ? (string) config('staff.label') : 'Generic'),
             pc: $this->pc($payload),
-            project: $this->str($payload, 'project'),
+            project: $this->str($payload, 'project') ?? $staff?->project,
             event: $event,
             tool: $tool,
             target: $this->redactor->target($target),
-            department: $this->router->route($event, $tool, $target, $target, $explicit),
+            department: $department,
             ts: $this->ts($payload),
         );
     }

@@ -1257,6 +1257,9 @@ export default class OfficeScene extends Phaser.Scene {
     // Dipanggil setiap kali state berubah. agents = senarai agent (tanpa yang dah ended).
     // opts.loaded: true bila snapshot sebenar dah dimuat. Render sebenar pertama letak staff terus di tempat.
     render(agents, opts = {}) {
+        // Staf sebenar yang Off (belum check in / habis kerja) tiada di peta, hanya dalam senarai Team.
+        // Kalau dia sedang di peta, dia berjalan keluar ikut pintu (dikendalikan seperti agent yang hilang).
+        agents = agents.filter((a) => a.status !== 'off');
         if (!this.ready) {
             this.pending = { agents, opts };
 

@@ -65,6 +65,10 @@
         #team details.ended { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 6px; }
         #team details.ended summary { cursor: pointer; color: var(--muted); font-size: 12px; }
         #team .ended-row { opacity: 0.7; }
+        #team .off-row { opacity: 0.6; }
+        .staff-tag { font-size: 10px; color: #7a4f12; background: #f5e3b8; border-radius: 999px; padding: 0 5px; margin-left: 3px; vertical-align: 1px; }
+        .staff-list { margin: 0; padding-left: 16px; }
+        .staff-list li { margin: 1px 0; }
         #feed { max-height: 260px; overflow: auto; font-size: 12px; }
         #feed li { padding: 3px 0; border-bottom: 1px solid var(--line); }
         .time { color: var(--muted); font-variant-numeric: tabular-nums; }

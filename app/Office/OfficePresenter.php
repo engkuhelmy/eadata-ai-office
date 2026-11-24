@@ -4,6 +4,7 @@ namespace App\Office;
 
 use App\Models\Agent;
 use App\Models\AgentEvent;
+use App\Models\StaffMember;
 
 /** Bentuk JSON yang sama untuk /office/state dan broadcast AgentUpdated. */
 class OfficePresenter
@@ -34,6 +35,31 @@ class OfficePresenter
                 'cache_read' => (int) $agent->tokens_cache_read,
                 'cache_create' => (int) $agent->tokens_cache_create,
             ],
+            'staff' => self::staff($agent),
+        ];
+    }
+
+    /** Profil Staff OS (jawatan, skop, handoff) untuk staf sebenar; null untuk agent biasa. Brief penuh tak dihantar ke browser. */
+    private static function staff(Agent $agent): ?array
+    {
+        $staff = StaffMember::forAgent($agent->vendor, $agent->session_id);
+        if ($staff === null) {
+            return null;
+        }
+
+        return [
+            'key' => $staff->key,
+            'role' => $staff->role,
+            'unit' => $staff->unit,
+            'reports_to' => $staff->reports_to,
+            'team' => $staff->team ?? [],
+            'fasa' => $staff->fasa,
+            'home' => $staff->home_department,
+            'room' => $staff->room,
+            'scope' => $staff->scope ?? [],
+            'handoffs' => $staff->handoffs ?? [],
+            'active' => $staff->is_active,
+            'checked_in_at' => $staff->checked_in_at?->toIso8601String(),
         ];
     }
 

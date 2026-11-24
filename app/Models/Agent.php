@@ -14,6 +14,9 @@ class Agent extends Model
     public const STATUS_ERROR = 'error';
     public const STATUS_ENDED = 'ended';
 
+    /** Staf sebenar (Staff OS) yang belum check in / dah habis kerja: kekal dalam senarai Team, tiada di peta. */
+    public const STATUS_OFF = 'off';
+
     /**
      * Gaya avatar yang dibenarkan (default = rupa asal). recep = penyambut tetamu; grab/shopee/jnt/dhl = penghantar demo;
      * exec / exec_w = eksekutif lelaki (sut) / wanita (blazer).

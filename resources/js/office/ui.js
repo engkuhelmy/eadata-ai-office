@@ -12,6 +12,7 @@ const STATUS_LABEL = {
     needs_approval: 'Perlu approval',
     rate_limited: 'Rehat',
     ended: 'Tamat',
+    off: 'Off',
 };
 
 const STATUS_COLOR = {
@@ -21,6 +22,7 @@ const STATUS_COLOR = {
     needs_approval: '#f5b841',
     rate_limited: '#64748b',
     ended: '#6b6257',
+    off: '#9a8f80',
 };
 
 let selectedId = null;
@@ -43,7 +45,7 @@ export function countByFloor(agents) {
     const counts = { building: 0 };
     for (const f of FLOORS) counts[f.id] = 0;
     for (const a of agents) {
-        if (a.status === 'ended') continue;
+        if (a.status === 'ended' || a.status === 'off') continue;
         const f = floorOf(a.department ?? 'door');
         counts[f] = (counts[f] ?? 0) + 1;
         counts.building++;
@@ -176,14 +178,23 @@ export function renderTeam(agents, ended = lastEnded) {
     }
 
     const html = Object.keys(groups).sort().map((project) => {
-        const rows = groups[project].map((a) => `
-            <li data-id="${a.id}" class="row">
-                <span class="dot" style="background:${hex(VENDOR_COLORS[a.vendor] ?? 0x64748b)}"></span>
-                <span class="name">${esc(a.name)}</span>
-                <span class="meta">${esc(a.label)}</span>
+        // Staf Off di bawah sekali
+        const list = [...groups[project]].sort((x, y) => (x.status === 'off') - (y.status === 'off'));
+        const rows = list.map((a) => {
+            const off = a.status === 'off';
+            const meta = a.staff?.role ?? a.label;
+            const task = off
+                ? (a.last_event_at ? `Habis kerja ${relTime(a.last_event_at)}` : 'Belum check in') + (a.staff?.home ? ` · meja ${teamPlace(a.staff.home)}` : '')
+                : teamPlace(a.department) + (a.current_task ? ' · ' + a.current_task : '');
+            return `
+            <li data-id="${a.id}" class="row${off ? ' off-row' : ''}">
+                <span class="dot" style="background:${hex(VENDOR_COLORS[a.vendor] ?? 0x64748b)}${off ? ';opacity:.4' : ''}"></span>
+                <span class="name">${esc(a.name)}${a.staff ? ' <span class="staff-tag" title="Staf sebenar (Staff OS)">Staf</span>' : ''}</span>
+                <span class="meta">${esc(meta)}</span>
                 <span class="status" style="color:${STATUS_COLOR[a.status] ?? '#a89c8c'}">${esc(STATUS_LABEL[a.status] ?? a.status)}</span>
-                <span class="task">${esc(teamPlace(a.department))}${a.current_task ? ' · ' + esc(a.current_task) : ''}</span>
-            </li>`).join('');
+                <span class="task">${esc(task)}</span>
+            </li>`;
+        }).join('');
 
         return `<h3>${esc(project)} <span class="count">${groups[project].length}</span></h3><ul>${rows}</ul>`;
     }).join('');
@@ -196,7 +207,7 @@ export function renderTeam(agents, ended = lastEnded) {
         row.addEventListener('click', () => {
             const id = Number(row.dataset.id);
             showDetail(id);
-            if (!row.classList.contains('ended-row')) onFocus(id);
+            if (!row.classList.contains('ended-row') && !row.classList.contains('off-row')) onFocus(id);
         });
     });
     node.querySelector('details.ended')?.addEventListener('toggle', (ev) => {
@@ -281,6 +292,23 @@ function tokenRow(u) {
     return `<dt>Token</dt><dd>Input ${fmtNum(input)} · Output ${fmtNum(output)} · Cache ${fmtNum(cache)}</dd>`;
 }
 
+// Profil Staff OS: jawatan, lapor kepada, meja tetap, skop dan handoff
+function staffRows(st) {
+    if (!st) return '';
+    const list = (items, max) => items.length
+        ? `<ul class="staff-list">${items.slice(0, max).map((x) => `<li>${esc(x)}</li>`).join('')}${items.length > max ? `<li class="muted">+${items.length - max} lagi</li>` : ''}</ul>`
+        : '-';
+    return `
+        <dt>Jawatan</dt><dd>${esc(st.role ?? '-')}</dd>
+        <dt>Unit</dt><dd>${esc(st.unit ?? '-')}${st.fasa ? ` · Fasa ${esc(st.fasa)}` : ''}</dd>
+        <dt>Lapor kepada</dt><dd>${esc(st.reports_to ?? '-')}</dd>
+        ${st.team?.length ? `<dt>Team</dt><dd>${esc(st.team.join(', '))}</dd>` : ''}
+        <dt>Meja tetap</dt><dd>${esc(st.home ? teamPlace(st.home) : (st.room ?? '-'))}</dd>
+        <dt>Brief</dt><dd>${st.checked_in_at ? `Diterima semasa check in ${esc(relTime(st.checked_in_at))}` : '<span class="muted">Belum check in</span>'}${st.active ? '' : ' · <strong>Tidak aktif</strong>'}</dd>
+        <dt>Skop</dt><dd>${list(st.scope ?? [], 6)}</dd>
+        <dt>Handoff</dt><dd>${list(st.handoffs ?? [], 6)}</dd>`;
+}
+
 export function refreshDetail() {
     const node = el('detail');
     if (!node) return;
@@ -301,7 +329,7 @@ export function refreshDetail() {
         <dt>Projek</dt><dd>${esc(a.project ?? '-')}</dd>
         <dt>Department</dt><dd>${a.department && DEPARTMENTS[a.department] ? esc(floorTag(floorOf(a.department))) + ' · ' : ''}${esc(deptLabel(a.department))}${a.pinned_department ? ' <span class="pin">dipin</span>' : ''}</dd>
         <dt>Status</dt><dd>${esc(STATUS_LABEL[a.status] ?? a.status)}</dd>
-        <dt>Task</dt><dd>${esc(a.current_task ?? '-')}</dd>${tokenRow(a.usage)}`;
+        <dt>Task</dt><dd>${esc(a.current_task ?? '-')}</dd>${tokenRow(a.usage)}${staffRows(a.staff)}`;
 
     const events = getEventsFor(selectedId, 10).map((e) =>
         `<li><span class="time">${esc(e.ts ? new Date(e.ts).toLocaleTimeString('ms-MY', { hour12: false }) : '')}</span> ${esc(e.event)} <span class="muted">${esc([e.tool, e.target].filter(Boolean).join(' '))}</span></li>`

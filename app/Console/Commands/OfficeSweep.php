@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Events\AgentUpdated;
 use App\Models\Agent;
+use App\Models\StaffMember;
 use App\Office\OfficePresenter;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -26,14 +27,28 @@ class OfficeSweep extends Command
         $endAfter = $now->copy()->subSeconds((int) $this->option('end'));
 
         $changed = 0;
+        // Staf sebenar (Staff OS): senyap 60 min = Off di meja tetap, bukan tamat
+        $staffHome = StaffMember::query()->pluck('home_department', 'key');
 
-        Agent::query()->whereNull('ended_at')->each(function (Agent $agent) use ($now, $chillAfter, $idleAfter, $endAfter, &$changed) {
+        Agent::query()->whereNull('ended_at')->each(function (Agent $agent) use ($now, $chillAfter, $idleAfter, $endAfter, $staffHome, &$changed) {
             $last = $agent->last_event_at ?? $agent->updated_at;
 
             // Sesi demo (office:demo) tak pernah ditamatkan oleh sweep, walaupun proses demo terhenti.
             $isDemo = str_starts_with((string) $agent->session_id, 'demo-');
+            $home = $agent->vendor === StaffMember::VENDOR && ! $isDemo ? $staffHome->get($agent->session_id) : null;
 
-            if ($last < $endAfter && ! $isDemo) {
+            if ($home !== null) {
+                if ($agent->status === Agent::STATUS_OFF) {
+                    return;
+                }
+                if ($last < $endAfter) {
+                    $agent->fill(['status' => Agent::STATUS_OFF, 'current_task' => null, 'department' => $home]);
+                }
+            }
+
+            if ($agent->status === Agent::STATUS_OFF) {
+                // ditandakan Off di atas: tiada idle/chill
+            } elseif ($last < $endAfter && ! $isDemo) {
                 $agent->fill(['status' => Agent::STATUS_ENDED, 'ended_at' => $now, 'current_task' => null]);
             } else {
                 // needs_approval sengaja dibiar: agent tu memang tunggu manusia
