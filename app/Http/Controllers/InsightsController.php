@@ -181,13 +181,16 @@ class InsightsController extends Controller
             $buckets[$first->copy()->addHours($i)->format('Y-m-d H')] = 0;
         }
 
+        // Kira dalam SQL ikut jam ('Y-m-d H' = 13 aksara pertama ts). Dulu setiap ts 24 jam dimuat sebagai Carbon:
+        // dengan demo 24 jam (~170k event sehari) PHP kehabisan memori dan /office/insights pulang 500.
         AgentEvent::query()
             ->where('ts', '>=', $first)
-            ->pluck('ts')
-            ->each(function ($ts) use (&$buckets) {
-                $key = $ts->format('Y-m-d H');
+            ->selectRaw('substr(ts, 1, 13) as hour_key, COUNT(*) as total')
+            ->groupBy('hour_key')
+            ->pluck('total', 'hour_key')
+            ->each(function ($total, $key) use (&$buckets) {
                 if (isset($buckets[$key])) {
-                    $buckets[$key]++;
+                    $buckets[$key] = (int) $total;
                 }
             });
 
