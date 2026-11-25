@@ -1,6 +1,7 @@
 import { AVATARS, AVATAR_LABELS, DEPARTMENTS, FLOORS, VENDOR_COLORS, floorOf } from './layout';
 import { applyBroadcast, getAgent, getEventsFor } from './state';
 import { esc, hex, fmtNum, lsGet, lsSet, relTime } from './util';
+import { fmtDuration as fmtTurn } from './notify';
 
 // Dari Blade: { canEdit, departments, csrf }
 const CONFIG = window.OFFICE ?? { canEdit: false, departments: [], csrf: '' };
@@ -24,6 +25,11 @@ const STATUS_COLOR = {
     ended: '#6b6257',
     off: '#9a8f80',
 };
+
+// Standby selepas turn_done = "Siap" (tunggu arahan), ikut Agent Office Kit
+const statusKey = (a) => (a.status === 'idle' && a.done_at ? 'done' : a.status);
+STATUS_LABEL.done = 'Siap';
+STATUS_COLOR.done = '#4fc3a1';
 
 let selectedId = null;
 let onFocus = () => {};
@@ -191,7 +197,7 @@ export function renderTeam(agents, ended = lastEnded) {
                 <span class="dot" style="background:${hex(VENDOR_COLORS[a.vendor] ?? 0x64748b)}${off ? ';opacity:.4' : ''}"></span>
                 <span class="name">${esc(a.name)}${a.staff ? ' <span class="staff-tag" title="Staf sebenar (Staff OS)">Staf</span>' : ''}</span>
                 <span class="meta">${esc(meta)}</span>
-                <span class="status" style="color:${STATUS_COLOR[a.status] ?? '#a89c8c'}">${esc(STATUS_LABEL[a.status] ?? a.status)}</span>
+                <span class="status" style="color:${STATUS_COLOR[statusKey(a)] ?? '#a89c8c'}">${esc(STATUS_LABEL[statusKey(a)] ?? a.status)}</span>
                 <span class="task">${esc(task)}</span>
             </li>`;
         }).join('');
@@ -292,6 +298,19 @@ function tokenRow(u) {
     return `<dt>Token</dt><dd>Input ${fmtNum(input)} · Output ${fmtNum(output)} · Cache ${fmtNum(cache)}</dd>`;
 }
 
+// Pusingan kerja: sedang berjalan sejak bila, tempoh pusingan terakhir, intern (subagent) aktif
+function turnRows(a) {
+    const rows = [];
+    if (a.turn_started_at) {
+        const sec = (Date.now() - new Date(a.turn_started_at).getTime()) / 1000;
+        if (sec >= 0) rows.push(`<dt>Pusingan</dt><dd>Sedang kerja ${esc(fmtTurn(sec))}</dd>`);
+    } else if (a.last_turn_seconds) {
+        rows.push(`<dt>Pusingan</dt><dd>Terakhir ${esc(fmtTurn(a.last_turn_seconds))}</dd>`);
+    }
+    if (a.subagents > 0) rows.push(`<dt>Intern</dt><dd>${esc(a.subagents)} subagent sedang jalan</dd>`);
+    return rows.join('');
+}
+
 // Profil Staff OS: jawatan, lapor kepada, meja tetap, skop dan handoff
 function staffRows(st) {
     if (!st) return '';
@@ -328,8 +347,8 @@ export function refreshDetail() {
         <dt>PC</dt><dd>${esc(a.pc ?? '-')}</dd>
         <dt>Projek</dt><dd>${esc(a.project ?? '-')}</dd>
         <dt>Department</dt><dd>${a.department && DEPARTMENTS[a.department] ? esc(floorTag(floorOf(a.department))) + ' · ' : ''}${esc(deptLabel(a.department))}${a.pinned_department ? ' <span class="pin">dipin</span>' : ''}</dd>
-        <dt>Status</dt><dd>${esc(STATUS_LABEL[a.status] ?? a.status)}</dd>
-        <dt>Task</dt><dd>${esc(a.current_task ?? '-')}</dd>${tokenRow(a.usage)}${staffRows(a.staff)}`;
+        <dt>Status</dt><dd>${esc(STATUS_LABEL[statusKey(a)] ?? a.status)}${statusKey(a) === 'done' ? ` <span class="muted">${esc(relTime(a.done_at))}</span>` : ''}</dd>
+        <dt>Task</dt><dd>${esc(a.current_task ?? '-')}</dd>${turnRows(a)}${tokenRow(a.usage)}${staffRows(a.staff)}`;
 
     const events = getEventsFor(selectedId, 10).map((e) =>
         `<li><span class="time">${esc(e.ts ? new Date(e.ts).toLocaleTimeString('ms-MY', { hour12: false }) : '')}</span> ${esc(e.event)} <span class="muted">${esc([e.tool, e.target].filter(Boolean).join(' '))}</span></li>`

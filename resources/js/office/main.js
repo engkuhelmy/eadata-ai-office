@@ -6,7 +6,8 @@ import * as store from './state';
 import * as ui from './ui';
 import { connectRealtime } from './realtime';
 import { initPanels } from './panels';
-import { initNotify, checkTransitions } from './notify';
+import { initNotify, checkTransitions, checkDone, sfx } from './notify';
+import { initAttention, updateAttention } from './attention';
 import { initTv, isTv } from './tv';
 import { lsGet, lsSet } from './util';
 
@@ -34,7 +35,18 @@ ui.initFilters();
 ui.setOnFocus((id) => scene.focusAgent(id));
 ui.initFloorTabs({ onView: setView });
 initNotify({ openAgent });
-if (!isTv) initPanels({ onOpenAgent: openAgent });
+if (!isTv) {
+    initPanels({ onOpenAgent: openAgent });
+    initAttention({
+        openAgent,
+        setView,
+        deselect: () => { scene.selectedId = null; },
+    });
+}
+
+// Pentas pelancaran: staff yang siap pusingan kerja >= 2 minit membentang di auditorium (L1)
+const LAUNCH_MIN_SECONDS = 120;
+scene.onLaunch = () => sfx('launch');
 
 scene.onSelect = (id) => ui.showDetail(id);
 scene.onViewChange = (view) => ui.setActiveView(view);
@@ -72,8 +84,13 @@ store.subscribe((snap) => {
     ui.refreshDetail();
     ui.updateFloorTabs(counts);
     checkTransitions(snap.agents, snap.loaded);
+    const fresh = isTv ? [] : checkDone(snap.agents, snap.loaded);
+    if (!isTv) updateAttention(snap.agents);
     scene.setFloorCounts(counts);
     scene.render(snap.agents, { loaded: snap.loaded });
+    for (const a of fresh) {
+        if ((a.last_turn_seconds ?? 0) >= LAUNCH_MIN_SECONDS) scene.present(a.id, a.name);
+    }
 });
 
 // Mod TV: pusing Bangunan -> L1 -> L2 -> L3 -> Rooftop (~15s setiap satu), langkau aras kosong

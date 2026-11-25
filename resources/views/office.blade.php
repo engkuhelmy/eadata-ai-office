@@ -118,6 +118,21 @@
         .alert-item { display: flex; align-items: stretch; background: #3a2a14; border: 1px solid #f5b841; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
         .alert-item.error { background: #3a1616; border-color: #e53935; }
         .alert-item.rate_limited { background: #1f2630; border-color: #64748b; }
+        .alert-item.done { background: #15302a; border-color: #4fc3a1; }
+        /* Pil perhatian: n approval · n error · n siap, klik untuk senarai */
+        .attn { position: relative; }
+        .attn-pill { border: 1px solid var(--line); color: var(--text); cursor: pointer; font-family: inherit; }
+        .attn-pill.hot { border-color: #f5b841; }
+        .attn-pill .a-appr { color: #f5b841; }
+        .attn-pill .a-err { color: #ff7070; }
+        .attn-pill .a-done { color: #4fc3a1; }
+        .attn-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: min(320px, calc(100vw - 24px)); max-height: 60vh; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+        .attn-menu[hidden] { display: none; }
+        .attn-row { display: grid; gap: 1px; width: 100%; text-align: left; background: #1f1b18; border: 1px solid var(--line); border-left: 3px solid #4fc3a1; border-radius: 6px; color: var(--text); padding: 6px 8px; margin-bottom: 4px; cursor: pointer; font-family: inherit; font-size: 13px; }
+        .attn-row span { color: var(--muted); font-size: 12px; }
+        .attn-row.r0 { border-left-color: #f5b841; }
+        .attn-row.r1 { border-left-color: #e53935; }
+        .attn-row:hover { border-color: var(--accent); }
         .alert-open { flex: 1; text-align: left; background: none; border: 0; color: var(--text); padding: 9px 12px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
         .alert-close { background: none; border: 0; color: var(--muted); padding: 0 12px; font-size: 20px; cursor: pointer; }
         /* Mod TV: ?tv=1 */
@@ -159,6 +174,10 @@
             </div>
         </div>
         <div class="head-right">
+            <div class="attn">
+                <button type="button" id="attn-pill" class="pill attn-pill" aria-haspopup="true" aria-expanded="false" title="Staff yang perlukan perhatian (Tab = seterusnya, Esc = tutup, 0-4 = aras)">Semua OK</button>
+                <div id="attn-menu" class="attn-menu" hidden></div>
+            </div>
             <a class="nav-link" href="/history">Sejarah</a>
             <a class="nav-link" href="/?tv=1">Mod TV</a>
             <button type="button" id="sound-toggle" class="head-btn">Bunyi: on</button>

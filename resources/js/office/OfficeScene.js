@@ -21,6 +21,10 @@ const FLOOR_DY = 640;
 const SLAB_H = 18; // tebal papak lantai
 const CLIMB_MS = 1200; // naik/turun satu aras
 const VIEW_MS = 800; // tween kamera antara paparan
+// Pentas pelancaran: staff yang siap pusingan kerja panjang membentang di auditorium (ikut Agent Office Kit)
+const PRESENT_MS = 20000; // lama di pentas selepas sampai
+const PRESENT_MAX_WAIT_MS = 75000; // jalan ke pentas terlalu lama (tersekat): batal
+const SAY_MS = 2200; // bubble sementara ("Ya boss?")
 const FIRST_FLOOR = FLOORS[0]?.id ?? 1;
 const TOP_FLOOR = FLOORS[FLOORS.length - 1]?.id ?? 1;
 
@@ -224,6 +228,9 @@ export default class OfficeScene extends Phaser.Scene {
         this.floorCounts = {};
         this.onSelect = () => {};
         this.onViewChange = () => {};
+        this.onLaunch = () => {}; // (agent) staff mula membentang di pentas: main.js mainkan fanfare
+        this.launchQueue = [];
+        this.presenter = null; // id staff yang sedang di pentas
     }
 
     preload() {
@@ -934,6 +941,7 @@ export default class OfficeScene extends Phaser.Scene {
     applyTextMode(s) {
         s.name.setVisible(this.textMode);
         s.bubble.setVisible(this.textMode && (s.lastText ?? '') !== '');
+        s.intern?.setVisible(this.textMode && s.intern.text !== '');
     }
 
     // Staff hanya boleh diklik bila arasnya kelihatan
@@ -1001,6 +1009,116 @@ export default class OfficeScene extends Phaser.Scene {
         if (!s) return;
         const floor = s.climb ? s.climb.to : s.floor;
         if (this.view !== floor) this.setView(floor);
+        this.greet(s);
+    }
+
+    // Staff dipilih: lompat kecil + "Ya boss? <tugas>"
+    greet(s) {
+        if (!s || s.leaving || s.presenting) return;
+        s.hopAt = this.time.now;
+        const task = s.agent?.current_task;
+        this.say(s, task ? `Ya boss? ${task}` : 'Ya boss?');
+    }
+
+    // Bubble sementara di atas kepala (mengatasi bubble tugas selama SAY_MS)
+    say(s, text, ms = SAY_MS) {
+        s.say = { text, until: this.time.now + ms };
+        this.updateVisuals(s, s.agent);
+    }
+
+    // ---------- Pentas pelancaran ----------
+
+    // Masukkan staff ke giliran pentas (seorang demi seorang). title = teks skrin LED.
+    present(id, title) {
+        if (this.presenter === id || this.launchQueue.some((q) => q.id === id)) return;
+        this.launchQueue.push({ id, title });
+        this.nextLaunch();
+    }
+
+    nextLaunch() {
+        if (!this.ready || this.presenter !== null) return;
+        while (this.launchQueue.length) {
+            const { id, title } = this.launchQueue.shift();
+            const s = this.staff.get(id);
+            if (!s || s.leaving) continue;
+            this.presenter = id;
+            s.presenting = { since: this.time.now, arrivedAt: null, title };
+            this.walkTo(s, 'auditorium');
+            s.lastText = null;
+            this.updateVisuals(s, s.agent);
+            return;
+        }
+    }
+
+    // Sampai di pentas: skrin LED, confetti, "SIAP!", fanfare
+    beginPresenting(s) {
+        s.presenting.arrivedAt = this.time.now;
+        s.facingLeft = false;
+        this.showLed(`\u{1F680} SIAP! ${s.presenting.title}`);
+        this.confetti(s);
+        this.say(s, 'SIAP! \u{1F389}', 4000);
+        this.onLaunch(s.agent);
+    }
+
+    endPresenting(s) {
+        s.presenting = null;
+        this.presenter = null;
+        this.hideLed();
+        if (!s.leaving) {
+            this.walkTo(s, s.agent?.department ?? 'door');
+            s.lastText = null;
+            this.updateVisuals(s, s.agent);
+        }
+        this.time.delayedCall(1500, () => this.nextLaunch());
+    }
+
+    showLed(text) {
+        const f = floorOf('auditorium');
+        const p = tileCenterF(f, 5, 1);
+        this.hideLed();
+        this.led = this.put(f, this.add
+            .text(p.x, p.y - 58, text, {
+                fontFamily: FONT,
+                fontSize: '13px',
+                fontStyle: 'bold',
+                color: '#fff3c4',
+                backgroundColor: '#1d1a17',
+                padding: { x: 8, y: 4 },
+                wordWrap: { width: 220 },
+                align: 'center',
+            })
+            .setOrigin(0.5, 1)
+            .setDepth(60000));
+        this.tweens.add({ targets: this.led, scale: { from: 0.4, to: 1 }, duration: 300, ease: 'Back.easeOut' });
+        this.tweens.add({ targets: this.led, alpha: { from: 1, to: 0.75 }, duration: 600, yoyo: true, repeat: -1, delay: 400 });
+    }
+
+    hideLed() {
+        if (!this.led) return;
+        this.tweens.killTweensOf(this.led);
+        this.led.destroy();
+        this.led = null;
+    }
+
+    // Kertas warna-warni jatuh di sekeliling penceramah
+    confetti(s) {
+        const colors = [0xea4335, 0xfbbc05, 0x34a853, 0x4285f4, 0xd97757, 0xffffff];
+        for (let i = 0; i < 46; i++) {
+            const x = s.pos.x + Phaser.Math.Between(-110, 110);
+            const y0 = s.pos.y - Phaser.Math.Between(110, 170);
+            const bit = this.put(s.floor, this.add.rectangle(x, y0, 4, 7, colors[i % colors.length]).setDepth(59000));
+            this.tweens.add({
+                targets: bit,
+                y: s.pos.y + Phaser.Math.Between(-10, 30),
+                x: x + Phaser.Math.Between(-30, 30),
+                angle: Phaser.Math.Between(-540, 540),
+                alpha: { from: 1, to: 0 },
+                delay: Phaser.Math.Between(0, 900),
+                duration: Phaser.Math.Between(1800, 3000),
+                ease: 'Sine.easeIn',
+                onComplete: () => bit.destroy(),
+            });
+        }
     }
 
     // ---------- Staff ----------
@@ -1061,13 +1179,26 @@ export default class OfficeScene extends Phaser.Scene {
             .setOrigin(0.5)
             .setVisible(false);
         const errDot = this.add.circle(-15, -42, 5, 0xe53935).setVisible(false);
+        // Siap, tunggu arahan: tanda hijau berdenyut (sama tempat dengan loceng approval)
+        const done = this.add.circle(15, -42, 6, 0x10a37f).setStrokeStyle(1, 0x0b5e48).setVisible(false);
+        const doneTxt = this.add
+            .text(15, -42, '✓', { fontFamily: FONT, fontSize: '9px', color: '#ffffff', fontStyle: 'bold' })
+            .setOrigin(0.5)
+            .setVisible(false);
+        // Intern (subagent) yang sedang berjalan: cip kecil di kiri
+        const intern = this.add
+            .text(-17, -26, '', { fontFamily: FONT, fontSize: '9px', color: '#1d1a17', backgroundColor: '#a5d8ff', padding: { x: 3, y: 1 } })
+            .setOrigin(0.5)
+            .setVisible(false);
 
-        container.add([shadow, ...layers, name, bubble, bell, bellTxt, errDot]);
+        container.add([shadow, ...layers, name, bubble, bell, bellTxt, errDot, done, doneTxt, intern]);
         container.setSize(36, 58);
         container.setInteractive(new Phaser.Geom.Rectangle(-18, -50, 36, 56), Phaser.Geom.Rectangle.Contains);
+        if (container.input) container.input.cursor = 'pointer';
 
         this.tweens.add({ targets: bell, scale: { from: 1, to: 1.25 }, duration: 500, yoyo: true, repeat: -1 });
         this.tweens.add({ targets: errDot, alpha: { from: 0.3, to: 1 }, duration: 400, yoyo: true, repeat: -1 });
+        this.tweens.add({ targets: done, scale: { from: 1, to: 1.2 }, duration: 700, yoyo: true, repeat: -1 });
 
         const s = {
             id: agent.id,
@@ -1083,6 +1214,13 @@ export default class OfficeScene extends Phaser.Scene {
             bell,
             bellTxt,
             errDot,
+            done,
+            doneTxt,
+            intern,
+            say: null, // { text, until } bubble sementara
+            hopAt: null,
+            hover: false,
+            presenting: null, // { since, arrivedAt } semasa di pentas pelancaran
             lastText: null,
             offset,
             floor,
@@ -1103,7 +1241,10 @@ export default class OfficeScene extends Phaser.Scene {
             this.selectedId = agent.id;
             this.onSelect(agent.id);
             if (this.view === 'building') this.setView(s.climb ? s.climb.to : s.floor);
+            else this.greet(s);
         });
+        container.on('pointerover', () => { s.hover = true; });
+        container.on('pointerout', () => { s.hover = false; });
 
         this.moveToLayer(s, floor);
         this.applyTextMode(s);
@@ -1294,7 +1435,8 @@ export default class OfficeScene extends Phaser.Scene {
                     s.leaving = false;
                     s.exitAt = null;
                 }
-                const target = a.department ?? s.dept ?? 'door';
+                // Semasa membentang, kekal di pentas sehingga habis giliran
+                const target = s.presenting ? 'auditorium' : a.department ?? s.dept ?? 'door';
                 if (s.dept !== target) {
                     this.walkTo(s, target);
                 }
@@ -1331,7 +1473,10 @@ export default class OfficeScene extends Phaser.Scene {
 
         // Tiada tugas: bubble ikut bilik (Toilet break, Pantry, Chill...) sebelum status
         const visitorAtDoor = VISITOR_STYLES.includes(s.style) && s.dept === 'door' && !s.leaving && a.status !== 'ended';
-        const text = a.current_task || (visitorAtDoor ? 'Ding dong! Delivery' : null) || (s.queued ? 'Beratur...' : s.standLabel) || DEPT_BUBBLE[s.dept] || STATUS_TEXT[a.status] || '';
+        const doneWaiting = a.status === 'idle' && !!a.done_at;
+        const sayNow = s.say && s.say.until > this.time.now ? s.say.text : null;
+        const text = sayNow || (s.presenting ? 'Membentang di pentas' : null) || a.current_task || (visitorAtDoor ? 'Ding dong! Delivery' : null)
+            || (s.queued ? 'Beratur...' : s.standLabel) || DEPT_BUBBLE[s.dept] || (doneWaiting ? 'Siap! Tunggu arahan' : null) || STATUS_TEXT[a.status] || '';
         if (text !== s.lastText) {
             s.lastText = text;
             s.bubble.setText(text);
@@ -1351,6 +1496,12 @@ export default class OfficeScene extends Phaser.Scene {
         s.bell.setVisible(needsApproval);
         s.bellTxt.setVisible(needsApproval);
         s.errDot.setVisible(a.status === 'error');
+        s.done.setVisible(doneWaiting && !needsApproval);
+        s.doneTxt.setVisible(doneWaiting && !needsApproval);
+
+        const interns = Number(a.subagents) || 0;
+        s.intern.setText(interns > 0 ? `+${interns} intern` : '');
+        s.intern.setVisible(interns > 0 && this.textMode);
     }
 
     computeDeptState(agents) {
@@ -1475,8 +1626,28 @@ export default class OfficeScene extends Phaser.Scene {
             if (!moving && s.seat !== null && s.sitting !== true) s.facingLeft = s.standFlip === true;
             this.animateFigure(s, time, moving);
 
+            // Pentas: mula membentang bila sampai, habis selepas PRESENT_MS (atau batal kalau tersekat)
+            if (s.presenting) {
+                const p = s.presenting;
+                if (p.arrivedAt === null && !moving && !s.leaving && s.dept === 'auditorium' && s.floor === floorOf('auditorium')) {
+                    this.beginPresenting(s);
+                } else if (s.leaving || (p.arrivedAt !== null && time - p.arrivedAt > PRESENT_MS) || (p.arrivedAt === null && time - p.since > PRESENT_MAX_WAIT_MS)) {
+                    this.endPresenting(s);
+                }
+            }
+
+            // Bubble sementara tamat: kembali ke bubble biasa
+            if (s.say && s.say.until <= time) {
+                s.say = null;
+                this.updateVisuals(s, s.agent);
+            }
+
             const bob = moving ? Math.sin(time / 90) * 1.2 : 0;
-            s.container.setPosition(s.pos.x, s.pos.y + bob);
+            const hopT = s.hopAt === null ? 1 : (time - s.hopAt) / 420;
+            const hop = hopT < 1 ? -Math.sin(Math.PI * hopT) * 10 : 0;
+            if (hopT >= 1) s.hopAt = null;
+            const lift = s.hover && !moving ? -2 : 0;
+            s.container.setPosition(s.pos.x, s.pos.y + bob + hop + lift);
             const depth = s.tile.c + s.tile.r + 0.5;
             if (s.depthKey !== depth) {
                 s.depthKey = depth;
@@ -1484,9 +1655,10 @@ export default class OfficeScene extends Phaser.Scene {
             }
 
             const selected = id === this.selectedId;
-            if (s.selectedShown !== selected) {
-                s.selectedShown = selected;
-                s.shadow.setFillStyle(selected ? 0xfbbc05 : 0x000000, selected ? 0.75 : 0.25);
+            const glow = selected ? 'sel' : s.hover ? 'hover' : 'none';
+            if (s.selectedShown !== glow) {
+                s.selectedShown = glow;
+                s.shadow.setFillStyle(glow === 'none' ? 0x000000 : 0xfbbc05, glow === 'sel' ? 0.75 : glow === 'hover' ? 0.45 : 0.25);
             }
 
             // Sampai pintu sambil keluar: tunggu 10s, kemudian hilang

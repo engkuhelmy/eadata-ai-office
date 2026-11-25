@@ -29,6 +29,10 @@ class OfficePresenter
             'current_task' => $agent->current_task,
             'last_event_at' => $agent->last_event_at?->toIso8601String(),
             'ended_at' => $agent->ended_at?->toIso8601String(),
+            'turn_started_at' => $agent->turn_started_at?->toIso8601String(),
+            'done_at' => $agent->done_at?->toIso8601String(),
+            'last_turn_seconds' => $agent->last_turn_seconds,
+            'subagents' => (int) $agent->subagents,
             'usage' => [
                 'input' => (int) $agent->tokens_in,
                 'output' => (int) $agent->tokens_out,

@@ -27,7 +27,11 @@ class Agent extends Model
         'vendor', 'session_id', 'label', 'name', 'custom_name', 'avatar', 'pc', 'project',
         'department', 'pinned_department', 'status', 'current_task', 'last_event_at', 'ended_at',
         'tokens_in', 'tokens_out', 'tokens_cache_read', 'tokens_cache_create',
+        'turn_started_at', 'done_at', 'last_turn_seconds', 'subagents',
     ];
+
+    /** Had kiraan intern (subagent) yang dipaparkan; hook kadang-kadang hantar start tanpa stop. */
+    public const MAX_SUBAGENTS = 9;
 
     /** Nama yang dipaparkan: nama yang owner tetapkan, atau nama automatik. */
     public function displayName(): ?string
@@ -46,6 +50,10 @@ class Agent extends Model
         return [
             'last_event_at' => 'datetime',
             'ended_at' => 'datetime',
+            'turn_started_at' => 'datetime',
+            'done_at' => 'datetime',
+            'last_turn_seconds' => 'integer',
+            'subagents' => 'integer',
         ];
     }
 

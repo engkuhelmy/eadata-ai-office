@@ -60,6 +60,11 @@ class ProcessAgentEvent implements ShouldQueue
         if (in_array($e->event, ['tool_start', 'tool_end'], true)) {
             $attributes['current_task'] = $this->taskFor($e);
         }
+        // Bubble approval tunjuk perkara yang perlu diluluskan, bukan tugas lama
+        if ($e->event === 'needs_approval') {
+            $item = $e->tool ?? $e->target;
+            $attributes['current_task'] = $item !== null ? Str::limit('Approval: '.$item, 60) : 'Perlu approval';
+        }
         // Rehat/chill: buang bubble tugas lama supaya tak tinggal "Editing X" yang basi.
         if (in_array($e->event, ['session_end', 'idle', 'turn_done'], true)) {
             $attributes['current_task'] = null;
@@ -73,10 +78,13 @@ class ProcessAgentEvent implements ShouldQueue
             $attributes['tokens_cache_create'] = $e->usage['cache_create'];
         }
 
-        $oldStatus = Agent::query()
+        $old = Agent::query()
             ->where('vendor', $e->vendor)
             ->where('session_id', $e->agentKey)
-            ->value('status');
+            ->first(['status', 'turn_started_at', 'subagents']);
+        $oldStatus = $old?->status;
+
+        $attributes += $this->turnAttributes($e->event, $ts, $old);
 
         $agent = Agent::updateOrCreate(
             ['vendor' => $e->vendor, 'session_id' => $e->agentKey],
@@ -103,6 +111,36 @@ class ProcessAgentEvent implements ShouldQueue
             // Reverb down: frontend fallback polling /office/state akan pulihkan
             Log::warning('AgentUpdated broadcast failed', ['message' => $exception->getMessage()]);
         }
+    }
+
+    /**
+     * Pusingan kerja + intern. Event kerja pertama selepas rehat mula pusingan; turn_done tutup pusingan
+     * (done_at = "Siap, tunggu arahan", last_turn_seconds untuk pentas pelancaran). Arahan baru buang tanda siap.
+     */
+    private function turnAttributes(string $event, Carbon $ts, ?Agent $old): array
+    {
+        $started = $old?->turn_started_at;
+        $subagents = (int) ($old?->subagents ?? 0);
+
+        return match ($event) {
+            'turn_done' => [
+                'done_at' => $ts,
+                'last_turn_seconds' => $started !== null ? (int) round(abs($started->diffInSeconds($ts))) : null,
+                'turn_started_at' => null,
+                'subagents' => 0,
+            ],
+            'session_end' => ['turn_started_at' => null, 'done_at' => null, 'subagents' => 0],
+            'idle' => ['turn_started_at' => null],
+            'session_start' => [],
+            default => array_filter([
+                'turn_started_at' => $started ?? $ts,
+                'subagents' => match ($event) {
+                    'subagent_start' => min(Agent::MAX_SUBAGENTS, $subagents + 1),
+                    'subagent_stop' => max(0, $subagents - 1),
+                    default => null,
+                },
+            ], fn ($v) => $v !== null) + ['done_at' => null],
+        };
     }
 
     private function statusFor(string $event): string
