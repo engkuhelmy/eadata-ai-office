@@ -16,7 +16,8 @@ class StaffRouter
         $isMeetingTool = in_array(strtolower((string) $tool), (array) config('staff.meeting_tools', []), true);
 
         return match ($event) {
-            'session_start', 'prompt' => $staff->home_department,
+            // idle/turn_done: balik ke meja dulu (cth. selepas handoff di Big Meeting Room); sweep bawa ke Chill Area selepas 2 min
+            'session_start', 'prompt', 'idle', 'turn_done' => $staff->home_department,
             'tool_start', 'tool_end' => $isMeetingTool ? $meeting : $staff->home_department,
             'subagent_start', 'subagent_stop' => $meeting,
             default => $default, // session_end (door), needs_approval, rate_limited, idle...

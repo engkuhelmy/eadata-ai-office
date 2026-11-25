@@ -17,6 +17,10 @@ return [
 
     'default' => env('CACHE_STORE', 'database'),
 
+    // Rate limiter (ingest, login) guna fail, bukan SQLite: setiap request ingest tak lagi buka transaksi tulis
+    // pada jadual cache (punca HTTP 500 "database is locked" semasa trafik memuncak).
+    'limiter' => env('CACHE_LIMITER', 'file'),
+
     /*
     |--------------------------------------------------------------------------
     | Cache Stores

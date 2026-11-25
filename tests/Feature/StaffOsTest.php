@@ -213,6 +213,12 @@ MD);
 
         $send(['event' => 'needs_approval', 'tool' => 'bayaran host']);
         $this->assertSame('approval', $agent()->department);
+        $this->assertSame('Approval: bayaran host', $agent()->current_task);
+
+        // Selepas handoff, idle = balik ke meja tetap (bukan kekal di Big Meeting Room)
+        $send(['event' => 'tool_start', 'tool' => 'handoff', 'target' => 'Fees kepada Mary']);
+        $send(['event' => 'idle']);
+        $this->assertSame('sales', $agent()->department);
 
         $send(['event' => 'session_end']);
         $this->assertSame(Agent::STATUS_OFF, $agent()->status);

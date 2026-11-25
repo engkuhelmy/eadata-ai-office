@@ -38,11 +38,14 @@ return [
             'database' => env('DB_DATABASE', database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            // Web, queue worker dan banyak hook menulis serentak: WAL + tunggu 5s sebelum "database is locked"
-            'busy_timeout' => env('DB_BUSY_TIMEOUT', 5000),
+            // Web, queue worker, demo dan banyak hook menulis serentak: WAL + tunggu sehingga 10s sebelum "database is locked"
+            'busy_timeout' => env('DB_BUSY_TIMEOUT', 10000),
             'journal_mode' => env('DB_JOURNAL_MODE', 'WAL'),
             'synchronous' => env('DB_SYNCHRONOUS', 'NORMAL'),
-            'transaction_mode' => 'DEFERRED',
+            // IMMEDIATE: ambil kunci tulis di awal transaksi, jadi busy_timeout terpakai. Dengan DEFERRED, transaksi
+            // baca-kemudian-tulis (queue pop, rate limiter cache) gagal serta-merta "database is locked" bila penulis
+            // lain masuk di tengah: ujian 6 proses x 300 transaksi = 1615 gagal (DEFERRED) vs 0 (IMMEDIATE).
+            'transaction_mode' => env('DB_TRANSACTION_MODE', 'IMMEDIATE'),
         ],
 
         'mysql' => [
